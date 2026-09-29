@@ -1,0 +1,5 @@
+# Pinned to the exact versions verified on the Week 1 build.
+pytest==9.1.1
+mypy==2.3.1
+ruff==0.16.6
+pydantic==2.9.2

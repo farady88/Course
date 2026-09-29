@@ -1,0 +1,29 @@
+[project]
+name = "day1-ledger"
+version = "0.1.0"
+requires-python = "==3.12.*"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# E/F  = pycodestyle + pyflakes (the baseline)
+# I    = import sorting
+# B    = flake8-bugbear: real bug patterns, not style (B006 is the mutable default)
+# UP   = pyupgrade: modern syntax for the pinned Python
+# SIM  = flake8-simplify
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+# Deliberately NOT strict yet. Default mypy catches contradictions in the
+# annotations you have written. `strict = true` additionally demands an
+# annotation on every function; we turn that on later in the day, on purpose,
+# so you can see the difference between "this is wrong" and "this is unstated".
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

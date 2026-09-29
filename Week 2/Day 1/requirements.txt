@@ -1,0 +1,7 @@
+# Pinned to the exact versions verified on the Day 1 build.
+fastapi==0.121.2
+uvicorn==0.38.0
+httpx==0.28.1
+pytest==9.1.1
+mypy==2.3.1
+ruff==0.16.6

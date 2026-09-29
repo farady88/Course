@@ -1,0 +1,21 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+.env
+.DS_Store
+__MACOSX/
+
+# Contains live API keys - do not commit
+Week 2/Day 2/firm-intelligence-api/API keys.txt
+
+# Nested git repos (student exercise clones) - kept local-only
+Week 1/Day 2/practical/repo/
+Week 1/Day 2/starter 2/
+Week 1/Day 5/day5-ship-prep/
+Week 2/Day 1/Kamile-w2d1-challenge/
+Week 2/Day 2/my-project/

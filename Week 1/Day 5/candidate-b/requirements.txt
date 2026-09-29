@@ -1,0 +1,5 @@
+# Pinned to the exact versions verified on the Day 1 build.
+# Regenerate with: uv pip compile requirements.in -o requirements.txt
+pytest==9.1.1
+mypy==2.3.1
+ruff==0.16.6
