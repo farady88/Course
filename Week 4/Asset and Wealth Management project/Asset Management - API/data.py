@@ -256,7 +256,6 @@ PORTFOLIOS = {
     },
     2: {
         "id": 2,
-        "mandate_id": 2,
         "positions": [
             {"fund_id": 4, "weight_pct": 70.0},
             {"fund_id": 5, "weight_pct": 30.0},
