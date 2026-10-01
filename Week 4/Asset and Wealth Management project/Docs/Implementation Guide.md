@@ -14,9 +14,9 @@ The portfolio manager will need to check whether a particular investment follows
 
 The platform brings these together so a user can:
 
-1. Look up structured facts (funds, mandates, portfolios) reliably.
+1. Look up structured facts (funds, clients, portfolios) reliably.
 2. Ask questions in natural language and get answers **grounded in cited documents**.
-3. Run deterministic **mandate compliance checks** on real numbers.
+3. Run deterministic **client compliance checks** on real numbers.
 4. Generate **client-friendly fund updates** and compare funds.
 5. Be refused when the system does not have a safe basis to answer.
 
@@ -31,8 +31,8 @@ arithmetic or decides compliance by itself.
 Two separate projects, each with its own virtual environment and `requirements.txt`.
 
 ```
-awm-api/    FastAPI backend: records, LLM features, vector search, agent
-awm-ui/     Streamlit front end: talks to the API over HTTP only
+Asset Management - API/    FastAPI backend: records, LLM features, vector search, agent
+Asset Management - UI/     Streamlit front end: talks to the API over HTTP only
 ```
 
 External services (all real, nothing mocked in the running system):
@@ -57,7 +57,7 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **Claude (Anthropic API)**
 - *What:* A large language model that reads text and writes text.
-- *Here:* Writes fund summaries, produces the typed mandate-fit assessment, answers questions from retrieved passages, and decides which tool the agent calls next. It never does arithmetic or decides compliance.
+- *Here:* Writes fund summaries, produces the typed client-fit assessment, answers questions from retrieved passages, and decides which tool the agent calls next. It never does arithmetic or decides compliance.
 
 **Embeddings**
 - *What:* A list of numbers that represents the meaning of a piece of text. Texts with similar meaning get similar numbers.
@@ -106,22 +106,23 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 ### Suggested API layout
 
 ```
-awm-api/
+Asset Management - API/
   main.py                 app creation, router registration, /health
   config.py               environment variables and thresholds
   models.py               Pydantic models (records, requests, analysis schema)
-  data.py                 in-memory or file-backed record store, seed data
+  Data/
+    records.py            in-memory record store and seed data (SECTORS, FUNDS, CLIENTS, PORTFOLIOS)
+    docs.py               the 8+ source documents (text for the knowledge base)
   llm.py                  Claude client, summary, streaming, structured analysis
   knowledge_store.py      Chroma + Voyage: index, search
   agent.py                tool-use loop and tools
-  screening.py            deterministic mandate screening logic
-  documents/              the 8+ source documents (or documents.py)
+  screening.py            deterministic client mandate screening logic
   routers/
-    funds.py  mandates.py  portfolios.py  insights.py  knowledge.py  agent.py
+    funds.py  clients.py  portfolios.py  insights.py  knowledge.py  agent.py
   tests/
   requirements.txt
   README.md
-awm-ui/
+Asset Management - UI/
   app.py                  Streamlit app
   requirements.txt
   README.md
@@ -155,24 +156,52 @@ Load them in one `config.py` and fail fast with a clear message if a required ke
 
 All data is **synthetic**. Invent fund houses, clients and figures. No real customer data.
 
+The seed data lives in `Data/records.py`. It holds three dictionaries, `FUNDS`, `CLIENTS` and
+`PORTFOLIOS`, plus a `SECTORS` list. Each dictionary is keyed by record id, and every record also
+carries its own `id` field. Dates are Python `date` objects. A rule that does not apply is `None`.
+
 ### 4.1 Fund
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | int | assigned by the API |
+| `id` | int | explicit in the seed data, assigned by the API for new records |
 | `name` | str | e.g. "Meridian Emerging Markets Equity" |
 | `strategy` | enum | `equity`, `fixed_income`, `multi_asset`, `emerging_markets`, `sustainable` |
 | `region` | str | |
 | `ongoing_charge_pct` | float | 0 to 5 |
 | `risk_rating` | int | 1 to 7 |
-| `esg_rating` | enum | `A`, `B`, `C`, `D`, or unrated |
+| `esg_rating` | enum | `A`, `B`, `C`, `D`, or `unrated` |
 | `inception_date` | date | |
-| `holdings` | list | each: `name`, `sector`, `weight_pct` |
+| `Percentage_of_fund_represented` | float | total `weight_pct` of the listed holdings, at least 25 |
+| `NAV_per_share` | list | four quarterly values, oldest first; each: `quarter` (`Q1`, `Q2`, `Q3` or `Q4`), `nav` (float) |
+| `holdings` | list | top positions only; each: `name`, `sector`, `weight_pct` |
 
-Validation: holding weights must sum to at most 100. Sectors come from a fixed list including
-`tobacco`, `weapons`, `fossil_fuels`, `gambling`, `technology`, `financials` and so on.
+Validation: holding weights must sum to at most 100, because `holdings` lists the top positions
+only and not the whole fund. `Percentage_of_fund_represented` is that sum, so it must match the
+holdings, and every fund must reach at least 25. Bond holdings carry the issuer name only, with no
+maturity year (for example "Government of Alderland"). Sectors come from the fixed `SECTORS` list:
+`technology`, `financials`, `healthcare`, `consumer_staples`, `consumer_discretionary`,
+`industrials`, `materials`, `utilities`, `real_estate`, `telecommunications`, `government`,
+`fossil_fuels`, `tobacco`, `weapons` and `gambling`.
 
-### 4.2 Mandate
+`NAV_per_share` is the net asset value of one share at the end of each of four consecutive
+quarters, labelled `Q1` (oldest) to `Q4` (latest). It lets a fund's trend be seen and assessed
+quarter by quarter. The values are synthetic and have no stated currency. The seed funds show
+different trends on purpose: steady growth, flat, volatile and declining.
+
+Example:
+
+```python
+"Percentage_of_fund_represented": 47.1,
+"NAV_per_share": [
+    {"quarter": "Q1", "nav": 3.82},
+    {"quarter": "Q2", "nav": 3.95},
+    {"quarter": "Q3", "nav": 4.08},
+    {"quarter": "Q4", "nav": 4.21},
+],
+```
+
+### 4.2 CLIENT
 
 | Field | Type | Notes |
 |---|---|---|
@@ -190,16 +219,27 @@ Validation: holding weights must sum to at most 100. Sectors come from a fixed l
 | Field | Type | Notes |
 |---|---|---|
 | `id` | int | |
-| `mandate_id` | int | must exist |
 | `positions` | list | each: `fund_id`, `weight_pct` |
 
-Position weights must sum to at most 100, and every `fund_id` must exist.
+A portfolio is not linked to a client. It holds positions only, so a portfolio is screened against
+a client chosen at request time (see section 8). Position weights must sum to at most 100, and
+every `fund_id` must exist. Any weight below 100 is treated as cash (portfolio 4 holds 10% cash).
 
 ### 4.4 Seed data
 
-At least **5 records per entity**. Include deliberate edge cases so the screening tool has
-something to find: one fund holding 3% tobacco, one with a high fee, one rated above a mandate's
-risk tolerance, one fully compliant pairing, one borderline pairing.
+The seed data has **7 funds, 5 clients and 5 portfolios**. Include deliberate edge cases so the
+screening tool has something to find. The current seed data covers:
+
+| Edge case | Where |
+|---|---|
+| Fund holding 3% tobacco | Fund 2 (Emerging Markets Equity) |
+| Fund clean on every rule for a typical ethical mandate | Fund 3 (Sustainable Global Equity), Client 3 |
+| Single holding of 12% breaching concentration limits | Fund 4 (Government and Corporate Bond) |
+| Borderline pairing, exactly on the limits (risk 4, fee 1.10, top holding 5.0) | Fund 5 (Balanced Multi-Asset), Client 5 |
+| High fee and no ESG rating | Fund 6 (Active Thematic Equity) |
+| Highest risk rating, weakest ESG, fossil fuel, gambling and weapons holdings | Fund 7 (Frontier Markets) |
+| Look-through tobacco exposure (15% of Fund 2 gives 0.45%) | Portfolio 5 |
+| Portfolio with cash | Portfolio 4 |
 
 ---
 
@@ -212,7 +252,7 @@ how many documents it holds.
 
 ### 5.2 Records (CRUD and filters)
 
-For each of funds, mandates and portfolios:
+For each of funds, clients and portfolios:
 
 | Method | Path | Behaviour |
 |---|---|---|
@@ -226,11 +266,11 @@ Required filters (at least two):
 
 - `GET /funds?risk_rating_max=4&strategy=equity`
 - `GET /funds?min_esg=B`
-- `GET /mandates?excludes_sector=tobacco`
-- `GET /portfolios?mandate_id=2`
+- `GET /clients?excludes_sector=tobacco`
+- `GET /portfolios?fund_id=3` (portfolios holding that fund)
 
-Referential integrity: creating a portfolio with an unknown `mandate_id` or `fund_id` returns 422
-with a clear message. Deleting a fund used by a portfolio returns 409.
+Referential integrity: creating a portfolio with an unknown `fund_id` returns 422 with a clear
+message. Deleting a fund used by a portfolio returns 409.
 
 ### 5.3 Error handling (one consistent scheme)
 
@@ -284,7 +324,7 @@ change the status, so log them and end the stream with a visible marker.
 
 ### 6.4 Structured analysis
 
-`POST /insights/mandate-fit` takes a `fund_id` and `mandate_id`. First run the deterministic
+`POST /insights/client-fit` takes a `fund_id` and `client_id`. First run the deterministic
 screening (section 8) so the facts are computed. Then ask Claude to produce a typed assessment,
 validated against a Pydantic model:
 
@@ -323,14 +363,15 @@ Write **at least 8** realistic documents, in the style professionals actually us
 
 1. Two fund factsheets (terse, tabular in prose form).
 2. Two quarterly manager commentaries (one explains an underperformance).
-3. One investment mandate agreement.
+3. One investment client agreement.
 4. One ESG and exclusions policy.
 5. One suitability rules summary.
 6. One fee and charges disclosure policy.
 7. More as desired (risk methodology, complaints handling).
 
 Each document has: `id`, `title`, `doc_type`, `date`, `fund_id` (optional) and `text`. Dates matter,
-see 7.5.
+see 7.5. The documents live in `Data/docs.py` (currently a placeholder), separate from the records
+in `Data/records.py`.
 
 ### 7.2 Indexing
 
@@ -386,7 +427,7 @@ by 0.85) or show the warning. Tell the model the document date in the prompt so 
 `screening.py` exposes a pure function:
 
 ```python
-def screen_fund_against_mandate(fund, mandate) -> ScreeningResult
+def screen_fund_against_client(fund, client) -> ScreeningResult
 ```
 
 It checks, in code:
@@ -394,7 +435,7 @@ It checks, in code:
 | Check | Rule |
 |---|---|
 | Excluded sectors | any holding whose sector is in `excluded_sectors`; report weight |
-| Risk | `fund.risk_rating > mandate.risk_tolerance` |
+| Risk | `fund.risk_rating > client.risk_tolerance` |
 | Concentration | any holding `weight_pct > max_single_holding_pct` |
 | ESG | fund rating worse than `min_esg_rating` (define an ordering A > B > C > D) |
 | Fees | `ongoing_charge_pct > max_ongoing_charge_pct` |
@@ -403,7 +444,8 @@ Return every breach with `rule`, `holding` (if any), `actual`, `limit` and a boo
 `compliant`. Also implement `screen_portfolio(portfolio)` which looks through positions:
 effective exposure to a sector is the sum of `position_weight * holding_weight / 100`.
 
-Expose it as `GET /portfolios/{id}/screen`. Unit test it thoroughly with plain data, no mocks
+Expose it as `GET /portfolios/{id}/screen?client_id=...`. The client is a query parameter because
+a portfolio does not store one. Unit test it thoroughly with plain data, no mocks
 needed. This is the highest-value code in the project because compliance depends on it.
 
 ---
@@ -415,7 +457,7 @@ needed. This is the highest-value code in the project because compliance depends
 | Tool | Input | What it does |
 |---|---|---|
 | `search_knowledge_base` | `query` | semantic search, returns top passages with ids and scores |
-| `screen_portfolio` | `mandate_id`, and `fund_id` or `portfolio_id` | runs the screening from section 8 on real records |
+| `screen_portfolio` | `client_id`, and `fund_id` or `portfolio_id` | runs the screening from section 8 on real records |
 | optional `get_fund` | `fund_id` | returns a fund's structured facts |
 
 Each has a JSON input schema with a clear description so the model knows when to use it.
@@ -443,7 +485,7 @@ for each `tool_use_id`. Pair every request with a result or the API rejects the 
 
 - Unknown tool name: error text, `is_error = True`.
 - Missing or wrongly typed argument: error text naming the field.
-- Record not found (unknown mandate id): error text.
+- Record not found (unknown client id): error text.
 - Any exception inside a tool: caught, reported as an error result.
 - A search that works but finds nothing: success with "No relevant documents found".
 
@@ -498,12 +540,12 @@ placeholder as chunks arrive. Show API error statuses cleanly.
 ### 10.4 Fund comparison (the domain-specific feature)
 
 Choose two or more funds. Show side by side: strategy, risk rating, fee, ESG rating, top holdings,
-and sector exposure as a bar chart. Highlight differences (the cheaper fund, the higher risk
+the quarterly `NAV_per_share` trend as a line chart, and sector exposure as a bar chart. Highlight differences (the cheaper fund, the higher risk
 fund). Add an optional "Explain the difference in plain English" button that calls an
 `/insights/compare` endpoint, which sends both records to Claude and returns a short comparison in
 client-friendly language.
 
-Also consider a mandate check panel: pick a fund and mandate, call the screening endpoint, and show
+Also consider a client check panel: pick a fund and client, call the screening endpoint, and show
 a table of breaches in red with the rule, actual and limit.
 
 ### 10.5 UI error handling
@@ -550,7 +592,7 @@ installing requirements, the environment variables table, the exact command to s
   scores).
 - Whether documents are chunked, and why, given their length and shape.
 - The worst wrong answer the system could give and what stops it. A strong candidate: telling a
-  user a fund complies with a mandate when it does not. Stopped by deterministic screening,
+  user a fund complies with a client when it does not. Stopped by deterministic screening,
   enforced consistency in code, and citation of sources.
 
 **Demo rehearsal:** one question answered using both tools (for example "does the Meridian
