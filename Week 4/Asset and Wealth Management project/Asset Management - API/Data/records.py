@@ -32,7 +32,7 @@ SECTORS = [
 # ---------------------------------------------------------------------------
 FUNDS = {
     1: {
-        "id": 1,
+        "fund_id": 1,
         "name": "Meridian Global Equity Growth",
         "strategy": "equity",
         "region": "Global",
@@ -62,7 +62,7 @@ FUNDS = {
     },
     # Edge case: holds 3% tobacco.
     2: {
-        "id": 2,
+        "fund_id": 2,
         "name": "Meridian Emerging Markets Equity",
         "strategy": "emerging_markets",
         "region": "Emerging Markets",
@@ -92,7 +92,7 @@ FUNDS = {
     },
     # Edge case: clean on every rule for a typical ethical mandate.
     3: {
-        "id": 3,
+        "fund_id": 3,
         "name": "Meridian Sustainable Global Equity",
         "strategy": "sustainable",
         "region": "Global",
@@ -122,7 +122,7 @@ FUNDS = {
     },
     # Edge case: a 12% single holding breaches tight concentration limits.
     4: {
-        "id": 4,
+        "fund_id": 4,
         "name": "Meridian Global Government and Corporate Bond",
         "strategy": "fixed_income",
         "region": "Global",
@@ -149,7 +149,7 @@ FUNDS = {
     },
     # Edge case: sits exactly on the limits of Mandate 5 (risk 4, fee 1.10, top holding 5.0).
     5: {
-        "id": 5,
+        "fund_id": 5,
         "name": "Meridian Balanced Multi-Asset",
         "strategy": "multi_asset",
         "region": "Global",
@@ -177,7 +177,7 @@ FUNDS = {
     },
     # Edge case: high fee, no ESG rating.
     6: {
-        "id": 6,
+        "fund_id": 6,
         "name": "Meridian Active Thematic Equity",
         "strategy": "equity",
         "region": "Global",
@@ -203,7 +203,7 @@ FUNDS = {
     },
     # Edge case: highest risk rating, weakest ESG.
     7: {
-        "id": 7,
+        "fund_id": 7,
         "name": "Meridian Frontier Markets",
         "strategy": "emerging_markets",
         "region": "Frontier Markets",
@@ -238,7 +238,7 @@ FUNDS = {
 # ---------------------------------------------------------------------------
 CLIENTS = {
     1: {
-        "id": 1,
+        "client_id": 1,
         "client_name": "Harrington Family Trust",
         "risk_tolerance": 5,
         "excluded_sectors": ["tobacco", "weapons"],
@@ -248,7 +248,7 @@ CLIENTS = {
         "notes": "Long-term growth for a multi-generational family trust. Trustees exclude tobacco and weapons.",
     },
     2: {
-        "id": 2,
+        "client_id": 2,
         "client_name": "Oakridge Pension Scheme",
         "risk_tolerance": 3,
         "excluded_sectors": [],
@@ -259,7 +259,7 @@ CLIENTS = {
     },
     # Edge case: strict ethical mandate, Meridian Sustainable Global Equity is fully compliant.
     3: {
-        "id": 3,
+        "client_id": 3,
         "client_name": "Whitmore Foundation",
         "risk_tolerance": 4,
         "excluded_sectors": ["tobacco", "weapons", "fossil_fuels", "gambling"],
@@ -269,7 +269,7 @@ CLIENTS = {
         "notes": "Charitable endowment with a strict ethical policy. Grants are funded from the income.",
     },
     4: {
-        "id": 4,
+        "client_id": 4,
         "client_name": "Castellan Growth Partners",
         "risk_tolerance": 6,
         "excluded_sectors": ["gambling"],
@@ -280,7 +280,7 @@ CLIENTS = {
     },
     # Edge case: limits sit exactly on Meridian Balanced Multi-Asset (risk 4, fee 1.10, top holding 5.0).
     5: {
-        "id": 5,
+        "client_id": 5,
         "client_name": "Dr Ingrid Lindqvist",
         "risk_tolerance": 4,
         "excluded_sectors": ["tobacco"],
@@ -297,7 +297,7 @@ CLIENTS = {
 # ---------------------------------------------------------------------------
 PORTFOLIOS = {
     1: {
-        "id": 1,
+        "portfolio_id": 1,
         "positions": [
             {"fund_id": 1, "weight_pct": 50.0},
             {"fund_id": 3, "weight_pct": 30.0},
@@ -305,14 +305,14 @@ PORTFOLIOS = {
         ],
     },
     2: {
-        "id": 2,
+        "portfolio_id": 2,
         "positions": [
             {"fund_id": 4, "weight_pct": 70.0},
             {"fund_id": 5, "weight_pct": 30.0},
         ],
     },
     3: {
-        "id": 3,
+        "portfolio_id": 3,
         "positions": [
             {"fund_id": 3, "weight_pct": 60.0},
             {"fund_id": 4, "weight_pct": 20.0},
@@ -321,7 +321,7 @@ PORTFOLIOS = {
     },
     # 10% cash.
     4: {
-        "id": 4,
+        "portfolio_id": 4,
         "positions": [
             {"fund_id": 1, "weight_pct": 30.0},
             {"fund_id": 2, "weight_pct": 30.0},
@@ -331,7 +331,7 @@ PORTFOLIOS = {
     },
     # Edge case: 15% in the emerging markets fund gives 0.45% look-through tobacco exposure.
     5: {
-        "id": 5,
+        "portfolio_id": 5,
         "positions": [
             {"fund_id": 5, "weight_pct": 60.0},
             {"fund_id": 3, "weight_pct": 25.0},
