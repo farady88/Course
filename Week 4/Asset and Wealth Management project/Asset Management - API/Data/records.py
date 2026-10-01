@@ -40,6 +40,13 @@ FUNDS = {
         "risk_rating": 5,
         "esg_rating": "B",
         "inception_date": date(2014, 3, 17),
+        "Percentage_of_fund_represented": 47.1,
+        "NAV_per_share": [
+            {"quarter": "Q1", "nav": 3.82},
+            {"quarter": "Q2", "nav": 3.95},
+            {"quarter": "Q3", "nav": 4.08},
+            {"quarter": "Q4", "nav": 4.21},
+        ],
         "holdings": [
             {"name": "Northbridge Software", "sector": "technology", "weight_pct": 7.5},
             {"name": "Aurelia Semiconductors", "sector": "technology", "weight_pct": 6.8},
@@ -63,6 +70,13 @@ FUNDS = {
         "risk_rating": 6,
         "esg_rating": "C",
         "inception_date": date(2011, 9, 5),
+        "Percentage_of_fund_represented": 46.2,
+        "NAV_per_share": [
+            {"quarter": "Q1", "nav": 2.46},
+            {"quarter": "Q2", "nav": 2.38},
+            {"quarter": "Q3", "nav": 2.51},
+            {"quarter": "Q4", "nav": 2.44},
+        ],
         "holdings": [
             {"name": "Jade Dragon Electronics", "sector": "technology", "weight_pct": 8.2},
             {"name": "Bharat Private Bank", "sector": "financials", "weight_pct": 6.5},
@@ -86,6 +100,13 @@ FUNDS = {
         "risk_rating": 4,
         "esg_rating": "A",
         "inception_date": date(2018, 6, 11),
+        "Percentage_of_fund_represented": 41.7,
+        "NAV_per_share": [
+            {"quarter": "Q1", "nav": 5.10},
+            {"quarter": "Q2", "nav": 5.18},
+            {"quarter": "Q3", "nav": 5.27},
+            {"quarter": "Q4", "nav": 5.39},
+        ],
         "holdings": [
             {"name": "Solvane Renewables", "sector": "utilities", "weight_pct": 5.5},
             {"name": "Nordic Wind Power", "sector": "utilities", "weight_pct": 5.0},
@@ -109,14 +130,21 @@ FUNDS = {
         "risk_rating": 3,
         "esg_rating": "B",
         "inception_date": date(2009, 1, 19),
+        "Percentage_of_fund_represented": 38.0,
+        "NAV_per_share": [
+            {"quarter": "Q1", "nav": 10.42},
+            {"quarter": "Q2", "nav": 10.45},
+            {"quarter": "Q3", "nav": 10.41},
+            {"quarter": "Q4", "nav": 10.47},
+        ],
         "holdings": [
-            {"name": "Government of Alderland 2034", "sector": "government", "weight_pct": 12.0},
-            {"name": "Republic of Norvale 2031", "sector": "government", "weight_pct": 9.5},
-            {"name": "Calder Bank 2029", "sector": "financials", "weight_pct": 4.0},
-            {"name": "Vantor Corp 2030", "sector": "technology", "weight_pct": 3.5},
-            {"name": "Stanmore Industrial 2032", "sector": "industrials", "weight_pct": 3.2},
-            {"name": "Pemberton Insurance 2033", "sector": "financials", "weight_pct": 3.0},
-            {"name": "Aurelia Utilities 2030", "sector": "utilities", "weight_pct": 2.8},
+            {"name": "Government of Alderland", "sector": "government", "weight_pct": 12.0},
+            {"name": "Republic of Norvale", "sector": "government", "weight_pct": 9.5},
+            {"name": "Calder Bank", "sector": "financials", "weight_pct": 4.0},
+            {"name": "Vantor Corp", "sector": "technology", "weight_pct": 3.5},
+            {"name": "Stanmore Industrial", "sector": "industrials", "weight_pct": 3.2},
+            {"name": "Pemberton Insurance", "sector": "financials", "weight_pct": 3.0},
+            {"name": "Aurelia Utilities", "sector": "utilities", "weight_pct": 2.8},
         ],
     },
     # Edge case: sits exactly on the limits of Mandate 5 (risk 4, fee 1.10, top holding 5.0).
@@ -129,8 +157,15 @@ FUNDS = {
         "risk_rating": 4,
         "esg_rating": "B",
         "inception_date": date(2015, 10, 2),
+        "Percentage_of_fund_represented": 30.0,
+        "NAV_per_share": [
+            {"quarter": "Q1", "nav": 7.35},
+            {"quarter": "Q2", "nav": 7.41},
+            {"quarter": "Q3", "nav": 7.38},
+            {"quarter": "Q4", "nav": 7.52},
+        ],
         "holdings": [
-            {"name": "Government of Alderland 2034", "sector": "government", "weight_pct": 5.0},
+            {"name": "Government of Alderland", "sector": "government", "weight_pct": 5.0},
             {"name": "Northbridge Software", "sector": "technology", "weight_pct": 4.5},
             {"name": "Calder Bank", "sector": "financials", "weight_pct": 4.2},
             {"name": "Helix Biopharma", "sector": "healthcare", "weight_pct": 3.8},
@@ -150,6 +185,13 @@ FUNDS = {
         "risk_rating": 5,
         "esg_rating": "unrated",
         "inception_date": date(2019, 2, 25),
+        "Percentage_of_fund_represented": 37.5,
+        "NAV_per_share": [
+            {"quarter": "Q1", "nav": 1.92},
+            {"quarter": "Q2", "nav": 2.08},
+            {"quarter": "Q3", "nav": 1.85},
+            {"quarter": "Q4", "nav": 1.71},
+        ],
         "holdings": [
             {"name": "Quantis AI Systems", "sector": "technology", "weight_pct": 9.5},
             {"name": "Neuronex Robotics", "sector": "technology", "weight_pct": 8.0},
@@ -159,7 +201,7 @@ FUNDS = {
             {"name": "StreamHub Media", "sector": "telecommunications", "weight_pct": 4.0},
         ],
     },
-    # Edge case: highest risk rating, weakest ESG, several excluded sectors.
+    # Edge case: highest risk rating, weakest ESG.
     7: {
         "id": 7,
         "name": "Meridian Frontier Markets",
@@ -169,6 +211,13 @@ FUNDS = {
         "risk_rating": 7,
         "esg_rating": "D",
         "inception_date": date(2012, 4, 30),
+        "Percentage_of_fund_represented": 41,
+        "NAV_per_share": [
+            {"quarter": "Q1", "nav": 1.58},
+            {"quarter": "Q2", "nav": 1.49},
+            {"quarter": "Q3", "nav": 1.37},
+            {"quarter": "Q4", "nav": 1.41},
+        ],
         "holdings": [
             {"name": "Sahel Oil and Gas", "sector": "fossil_fuels", "weight_pct": 10.5},
             {"name": "Delta Petroleum", "sector": "fossil_fuels", "weight_pct": 7.0},
@@ -181,12 +230,13 @@ FUNDS = {
     },
 }
 
+
 # ---------------------------------------------------------------------------
-# Mandates
+# CLIENTS
 # risk_tolerance: highest fund risk_rating allowed (1 to 7)
 # min_esg_rating and max_ongoing_charge_pct may be None (no rule).
 # ---------------------------------------------------------------------------
-MANDATES = {
+CLIENTS = {
     1: {
         "id": 1,
         "client_name": "Harrington Family Trust",

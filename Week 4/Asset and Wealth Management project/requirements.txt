@@ -5,3 +5,6 @@ pydantic==2.9.2
 pytest==9.1.1
 mypy==2.3.1
 ruff==0.16.6
+chromadb==1.5.9
+voyageai==0.5.0
+anthropic==1.11.0
