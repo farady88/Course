@@ -252,15 +252,27 @@ how many documents it holds.
 
 ### 5.2 Records (CRUD and filters)
 
-For each of funds, clients and portfolios:
+For clients and portfolios, implement full CRUD operations. For funds, portfolio managers have read-only access as fund creation/modification involves other teams:
 
 | Method | Path | Behaviour |
 |---|---|---|
-| POST | `/funds` | create, validated by Pydantic, returns 201 |
+| **Funds (read-only)** |  |  |
 | GET | `/funds` | list, with filters |
 | GET | `/funds/{id}` | one record, 404 if absent |
-| PUT | `/funds/{id}` | update, 404 if absent |
-| DELETE | `/funds/{id}` | delete, 204, 404 if absent |
+| **Clients and Portfolios (full CRUD)** |  |  |
+| POST | `/funds` | create, validated by Pydantic, returns 201 *(not implemented for funds)* |
+| PUT | `/funds/{id}` | update, 404 if absent *(not implemented for funds)* |
+| DELETE | `/funds/{id}` | delete, 204, 404 if absent *(not implemented for funds)* |
+| POST | `/clients` | create, validated by Pydantic, returns 201 |
+| GET | `/clients` | list, with filters |
+| GET | `/clients/{id}` | one record, 404 if absent |
+| PUT | `/clients/{id}` | update, 404 if absent |
+| DELETE | `/clients/{id}` | delete, 204, 404 if absent |
+| POST | `/portfolios` | create, validated by Pydantic, returns 201 |
+| GET | `/portfolios` | list, with filters |
+| GET | `/portfolios/{id}` | one record, 404 if absent |
+| PUT | `/portfolios/{id}` | update, 404 if absent |
+| DELETE | `/portfolios/{id}` | delete, 204, 404 if absent |
 
 Required filters (at least two):
 
