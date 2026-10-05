@@ -44,7 +44,7 @@ def test_estimate_does_not_call_the_model(monkeypatch):
 
 
 def test_stream_yields_chunks(monkeypatch):
-    monkeypatch.setattr(llm, "stream_firm_summary", lambda firm: iter(["Hard", "ing" "& Voss"]))
+    monkeypatch.setattr(llm, "stream_firm_summary", lambda firm: iter(["Hard", "ing", " & Voss"]))
     with client.stream("GET", "/firms/1/summary/stream") as response:
         assert response.status_code == 200
         body = "".join(response.iter_text())
