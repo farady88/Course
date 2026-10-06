@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from anthropic import APIStatusError, APITimeoutError, RateLimitError
+import grounding
 import llm
 import knowledge_store as knowledge
 
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/knowledge", tags=["knowlegde"])
 # create your class (QUESTION) using base model
 #  w.2 field (question and top_k)
 class Question (BaseModel):
-    question: str = Field(min_length=1)
+    question: str = Field(min_length=3 )
     top_k: int = Field(default=3, gt=0, le=8)
 
 
@@ -93,4 +94,5 @@ def ask(q: Question):
         "input_tokens": result["input_tokens"],
         "output_tokens": result["output_tokens"],
         "stop_reason": result["stop_reason"],
+        "grounding": grounding.check_citations(result["answer"],[h["id"] for h in usable])
     }
