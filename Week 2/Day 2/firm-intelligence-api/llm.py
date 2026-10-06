@@ -129,7 +129,7 @@ def answer_from_context(question: str, context: str, system: str = GROUNDED_SYST
     response = client.messages.create(
         model=MODEL,
         max_tokens=500,
-        system=GROUNDED_SYSTEM_PROMPT,
+        system=system,
         messages=[{
             "role": "user",
             "content": f"Context: \n\n{context}\n\nQuestion: {question}",
