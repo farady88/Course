@@ -1,0 +1,18 @@
+==================================================
+QUESTION:  Who is the managing partner of HArding & Voss, and how long have they 
+    held the role? How does Harding & Voss's profitability compare with the
+    Magic Circle firms?
+
+n-- loose prompt ---
+The provided documents do not answer that question.
+
+The document does not identify the managing partner by name or state how long they have held the role. It also does not provide information about Harding & Voss's profitability or any comparison with Magic Circle firms. [doc-101]
+
+ refusal: True passsd: True
+
+n-- grounded prompt ---
+The provided documents do not answer that question.
+
+The document does not name the managing partner or specify how long they have held the role. It also does not provide information about Harding & Voss's profitability or any comparison with Magic Circle firms [doc-101].
+
+ refusal: True passsd: True
