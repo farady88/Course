@@ -1,11 +1,15 @@
 """In-memory record store and seed data. All data is synthetic.
 
-Each store is a dict keyed by record id. Every record also carries its own "id".
+The records are the authoritative source for exact, machine-checkable facts such as:
+fund charges, risk ratings, ESG ratings, holdings, weights, clients and portfolios.
+
+Documents in docs.py provide qualitative investment context, methodologies, mandates,
+historical commentary and policy interpretation. They intentionally do not duplicate
+every structured fact.
 """
 
 from datetime import date
 
-# Fixed list of sectors a holding may belong to (guide section 4.1).
 SECTORS = [
     "technology",
     "financials",
@@ -26,9 +30,14 @@ SECTORS = [
 
 # ---------------------------------------------------------------------------
 # Funds
-# strategy: equity | fixed_income | multi_asset | emerging_markets | sustainable
-# esg_rating: A | B | C | D | unrated
-# Holdings list the top positions only, so weights sum to at most 100.
+#
+# Added fields:
+# - benchmark_name: reference index/benchmark used for investment reporting.
+# - benchmark_type: broad description of the benchmark.
+# - data_as_of_date: date of the structured snapshot.
+#
+# These additions identify the comparison framework and time point. Numerical
+# screening facts remain in the existing fields and are authoritative here.
 # ---------------------------------------------------------------------------
 FUNDS = {
     1: {
@@ -40,6 +49,9 @@ FUNDS = {
         "risk_rating": 5,
         "esg_rating": "B",
         "inception_date": date(2014, 3, 17),
+        "data_as_of_date": date(2024, 12, 31),
+        "benchmark_name": "Meridian Global Equity Growth Reference Index",
+        "benchmark_type": "Global large- and mid-cap equity benchmark",
         "Percentage_of_fund_represented": 47.1,
         "NAV_per_share": [
             {"quarter": "Q1", "nav": 3.82},
@@ -60,7 +72,6 @@ FUNDS = {
             {"name": "Tessaly Retail", "sector": "consumer_discretionary", "weight_pct": 3.0},
         ],
     },
-    # Edge case: holds 3% tobacco.
     2: {
         "fund_id": 2,
         "name": "Meridian Emerging Markets Equity",
@@ -70,6 +81,9 @@ FUNDS = {
         "risk_rating": 6,
         "esg_rating": "C",
         "inception_date": date(2011, 9, 5),
+        "data_as_of_date": date(2024, 12, 31),
+        "benchmark_name": "Meridian Emerging Markets Equity Reference Index",
+        "benchmark_type": "Broad emerging-markets equity benchmark",
         "Percentage_of_fund_represented": 46.2,
         "NAV_per_share": [
             {"quarter": "Q1", "nav": 2.46},
@@ -90,7 +104,6 @@ FUNDS = {
             {"name": "Kestrel Tobacco Holdings", "sector": "tobacco", "weight_pct": 3.0},
         ],
     },
-    # Edge case: clean on every rule for a typical ethical mandate.
     3: {
         "fund_id": 3,
         "name": "Meridian Sustainable Global Equity",
@@ -100,6 +113,9 @@ FUNDS = {
         "risk_rating": 4,
         "esg_rating": "A",
         "inception_date": date(2018, 6, 11),
+        "data_as_of_date": date(2024, 12, 31),
+        "benchmark_name": "Meridian Sustainable Global Equity Reference Index",
+        "benchmark_type": "Global equity benchmark with sustainability constraints",
         "Percentage_of_fund_represented": 41.7,
         "NAV_per_share": [
             {"quarter": "Q1", "nav": 5.10},
@@ -120,7 +136,6 @@ FUNDS = {
             {"name": "Orbis Medical", "sector": "healthcare", "weight_pct": 3.0},
         ],
     },
-    # Edge case: a 12% single holding breaches tight concentration limits.
     4: {
         "fund_id": 4,
         "name": "Meridian Global Government and Corporate Bond",
@@ -130,6 +145,11 @@ FUNDS = {
         "risk_rating": 3,
         "esg_rating": "B",
         "inception_date": date(2009, 1, 19),
+        "data_as_of_date": date(2024, 12, 31),
+        "benchmark_name": "Meridian Global Government and Corporate Bond Reference Index",
+        "benchmark_type": "Global government and investment-grade corporate bond benchmark",
+        "duration_years": 5.2,
+        "yield_to_maturity_pct": 4.1,
         "Percentage_of_fund_represented": 38.0,
         "NAV_per_share": [
             {"quarter": "Q1", "nav": 10.42},
@@ -147,7 +167,6 @@ FUNDS = {
             {"name": "Aurelia Utilities", "sector": "utilities", "weight_pct": 2.8},
         ],
     },
-    # Edge case: sits exactly on the limits of Mandate 5 (risk 4, fee 1.10, top holding 5.0).
     5: {
         "fund_id": 5,
         "name": "Meridian Balanced Multi-Asset",
@@ -157,6 +176,9 @@ FUNDS = {
         "risk_rating": 4,
         "esg_rating": "B",
         "inception_date": date(2015, 10, 2),
+        "data_as_of_date": date(2024, 12, 31),
+        "benchmark_name": "Meridian Balanced Multi-Asset Reference Benchmark",
+        "benchmark_type": "Strategic multi-asset benchmark",
         "Percentage_of_fund_represented": 30.0,
         "NAV_per_share": [
             {"quarter": "Q1", "nav": 7.35},
@@ -175,7 +197,6 @@ FUNDS = {
             {"name": "Ridgeway Properties", "sector": "real_estate", "weight_pct": 2.8},
         ],
     },
-    # Edge case: high fee, no ESG rating.
     6: {
         "fund_id": 6,
         "name": "Meridian Active Thematic Equity",
@@ -185,6 +206,9 @@ FUNDS = {
         "risk_rating": 5,
         "esg_rating": "unrated",
         "inception_date": date(2019, 2, 25),
+        "data_as_of_date": date(2024, 12, 31),
+        "benchmark_name": "Meridian Active Thematic Equity Reference Index",
+        "benchmark_type": "Global thematic equity benchmark",
         "Percentage_of_fund_represented": 37.5,
         "NAV_per_share": [
             {"quarter": "Q1", "nav": 1.92},
@@ -201,7 +225,6 @@ FUNDS = {
             {"name": "StreamHub Media", "sector": "telecommunications", "weight_pct": 4.0},
         ],
     },
-    # Edge case: highest risk rating, weakest ESG.
     7: {
         "fund_id": 7,
         "name": "Meridian Frontier Markets",
@@ -211,7 +234,10 @@ FUNDS = {
         "risk_rating": 7,
         "esg_rating": "D",
         "inception_date": date(2012, 4, 30),
-        "Percentage_of_fund_represented": 41,
+        "data_as_of_date": date(2024, 12, 31),
+        "benchmark_name": "Meridian Frontier Markets Reference Index",
+        "benchmark_type": "Frontier-markets equity benchmark",
+        "Percentage_of_fund_represented": 41.0,
         "NAV_per_share": [
             {"quarter": "Q1", "nav": 1.58},
             {"quarter": "Q2", "nav": 1.49},
@@ -229,7 +255,6 @@ FUNDS = {
         ],
     },
 }
-
 
 # ---------------------------------------------------------------------------
 # CLIENTS
@@ -257,7 +282,6 @@ CLIENTS = {
         "max_ongoing_charge_pct": 0.60,
         "notes": "Capital preservation for a closed defined-benefit scheme. Low cost and low risk are the priorities.",
     },
-    # Edge case: strict ethical mandate, Meridian Sustainable Global Equity is fully compliant.
     3: {
         "client_id": 3,
         "client_name": "Whitmore Foundation",
@@ -278,7 +302,6 @@ CLIENTS = {
         "max_ongoing_charge_pct": None,
         "notes": "Family office with a high risk appetite and no fee ceiling. Only gambling is excluded.",
     },
-    # Edge case: limits sit exactly on Meridian Balanced Multi-Asset (risk 4, fee 1.10, top holding 5.0).
     5: {
         "client_id": 5,
         "client_name": "Dr Ingrid Lindqvist",
@@ -291,10 +314,6 @@ CLIENTS = {
     },
 }
 
-# ---------------------------------------------------------------------------
-# Portfolios
-# positions: fund_id must exist in FUNDS, weights sum to at most 100
-# ---------------------------------------------------------------------------
 PORTFOLIOS = {
     1: {
         "portfolio_id": 1,
@@ -319,7 +338,6 @@ PORTFOLIOS = {
             {"fund_id": 5, "weight_pct": 20.0},
         ],
     },
-    # 10% cash.
     4: {
         "portfolio_id": 4,
         "positions": [
@@ -328,8 +346,8 @@ PORTFOLIOS = {
             {"fund_id": 6, "weight_pct": 20.0},
             {"fund_id": 7, "weight_pct": 10.0},
         ],
+        "cash_weight_pct": 10.0,
     },
-    # Edge case: 15% in the emerging markets fund gives 0.45% look-through tobacco exposure.
     5: {
         "portfolio_id": 5,
         "positions": [
