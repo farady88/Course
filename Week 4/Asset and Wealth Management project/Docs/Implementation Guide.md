@@ -51,6 +51,40 @@ UI -> API -> Voyage (embed question) -> Chroma (top matches + scores)
           -> Claude (answer using only the retrieved text) -> API -> UI
 ```
 
+### Data flow
+
+All data starts in two files under `Data/`, and each one has a single job:
+
+| Source | Holds | Authoritative for |
+|---|---|---|
+| `Data/records.py` | `FUNDS`, `CLIENTS`, `PORTFOLIOS`, `SECTORS` | exact, machine-checkable facts: charges, risk and ESG ratings, holdings, weights, limits, positions |
+| `Data/docs.py` | `DOCUMENTS` (and `DOCUMENT_LIST`) | qualitative context: mandates, philosophy, methodology, policy, historical commentary |
+
+The documents deliberately do not duplicate every structured fact, and they never decide
+compliance. Several of them say so in their own text (for example, "exact compliance must be
+determined by `screening.py`").
+
+```
+records.py (FUNDS, CLIENTS, PORTFOLIOS)
+    -> routers (CRUD, filters, read-only funds)        structured lookups
+    -> screening.py (deterministic rules)              compliance facts
+    -> llm.py (summary, streaming, client-fit)         record fields go into the prompt
+    -> agent tools: get_fund, screen_portfolio
+
+docs.py (DOCUMENTS)
+    -> knowledge_store.index: embed with Voyage (document type), upsert into Chroma
+    -> knowledge_store.search: embed query (query type), Chroma top k, score, floor, staleness
+    -> /knowledge/search, /knowledge/ask (refuse here, else Claude with retrieved text)
+    -> agent tool: search_knowledge_base
+```
+
+The two streams meet only in the places that need both: `/insights/client-fit` (screening result
+from records, supporting passages from documents) and the agent (one tool per stream).
+
+**Precedence rule.** When a document and a record disagree, the record wins for exact numbers
+(see the *Structured-data precedence* section of document 17). A document is context, never the
+source for a number that a record already holds. Every prompt that mixes the two must say so.
+
 ### Core design tools
 
 Each tool below has one job. Knowing which job makes it easier to see where a bug lives.
@@ -69,7 +103,7 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **Chroma (vector database)**
 - *What:* A database that stores embeddings and returns the ones closest to a given embedding.
-- *Here:* Persists document embeddings on local disk (`CHROMA_PATH`) with `doc_type`, `date` and `fund_id` metadata. Re-indexing upserts by document id, so nothing is duplicated. It returns a distance, which we convert to a similarity score.
+- *Here:* Persists document embeddings on local disk (`CHROMA_PATH`) with the document's metadata (section 7.2). Re-indexing upserts by document id, so nothing is duplicated. It returns a distance, which we convert to a similarity score.
 
 **Semantic search and the relevance floor**
 - *What:* Search by meaning, ranked by similarity score. The floor is the minimum score we accept.
@@ -112,7 +146,7 @@ Asset Management - API/
   models.py               Pydantic models (records, requests, analysis schema)
   Data/
     records.py            in-memory record store and seed data (SECTORS, FUNDS, CLIENTS, PORTFOLIOS)
-    docs.py               the 8+ source documents (text for the knowledge base)
+    docs.py               the 25 source documents (DOCUMENTS dict and DOCUMENT_LIST for the knowledge base)
   llm.py                  Claude client, summary, streaming, structured analysis
   knowledge_store.py      Chroma + Voyage: index, search
   agent.py                tool-use loop and tools
@@ -156,15 +190,19 @@ Load them in one `config.py` and fail fast with a clear message if a required ke
 
 All data is **synthetic**. Invent fund houses, clients and figures. No real customer data.
 
-The seed data lives in `Data/records.py`. It holds three dictionaries, `FUNDS`, `CLIENTS` and
+The structured seed data lives in `Data/records.py`. It holds three dictionaries, `FUNDS`, `CLIENTS` and
 `PORTFOLIOS`, plus a `SECTORS` list. Each dictionary is keyed by record id, and every record also
-carries its own `id` field. Dates are Python `date` objects. A rule that does not apply is `None`.
+carries its own id field, named after the record type (`fund_id`, `client_id`, `portfolio_id`).
+Dates are Python `date` objects. A rule that does not apply is `None`.
+
+The qualitative documents live separately in `Data/docs.py` (section 7.1). Records hold the
+numbers; documents explain them. See *Data flow* in section 2.
 
 ### 4.1 Fund
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | int | explicit in the seed data, assigned by the API for new records |
+| `fund_id` | int | explicit in the seed data, assigned by the API for new records |
 | `name` | str | e.g. "Meridian Emerging Markets Equity" |
 | `strategy` | enum | `equity`, `fixed_income`, `multi_asset`, `emerging_markets`, `sustainable` |
 | `region` | str | |
@@ -172,6 +210,11 @@ carries its own `id` field. Dates are Python `date` objects. A rule that does no
 | `risk_rating` | int | 1 to 7 |
 | `esg_rating` | enum | `A`, `B`, `C`, `D`, or `unrated` |
 | `inception_date` | date | |
+| `data_as_of_date` | date | date of the structured snapshot (31 Dec 2024 for every seed fund) |
+| `benchmark_name` | str | reference index used for reporting, e.g. "Meridian Global Equity Growth Reference Index" |
+| `benchmark_type` | str | short description of the benchmark |
+| `duration_years` | float, optional | bond fund only (Fund 4: 5.2) |
+| `yield_to_maturity_pct` | float, optional | bond fund only (Fund 4: 4.1) |
 | `Percentage_of_fund_represented` | float | total `weight_pct` of the listed holdings, at least 25 |
 | `NAV_per_share` | list | four quarterly values, oldest first; each: `quarter` (`Q1`, `Q2`, `Q3` or `Q4`), `nav` (float) |
 | `holdings` | list | top positions only; each: `name`, `sector`, `weight_pct` |
@@ -183,6 +226,10 @@ maturity year (for example "Government of Alderland"). Sectors come from the fix
 `technology`, `financials`, `healthcare`, `consumer_staples`, `consumer_discretionary`,
 `industrials`, `materials`, `utilities`, `real_estate`, `telecommunications`, `government`,
 `fossil_fuels`, `tobacco`, `weapons` and `gambling`.
+
+The benchmark fields and `data_as_of_date` name the comparison framework and the point in time.
+The records contain no benchmark return series, so the system must not invent benchmark-relative
+performance. Screening facts stay in the numeric fields above, which are authoritative.
 
 `NAV_per_share` is the net asset value of one share at the end of each of four consecutive
 quarters, labelled `Q1` (oldest) to `Q4` (latest). It lets a fund's trend be seen and assessed
@@ -205,7 +252,7 @@ Example:
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | int | |
+| `client_id` | int | |
 | `client_name` | str | invented |
 | `risk_tolerance` | int | 1 to 7, the highest fund risk allowed |
 | `excluded_sectors` | list[str] | e.g. `["tobacco", "weapons"]` |
@@ -218,12 +265,15 @@ Example:
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | int | |
+| `portfolio_id` | int | |
 | `positions` | list | each: `fund_id`, `weight_pct` |
+| `cash_weight_pct` | float, optional | cash held outside any fund; absent means 0 |
 
 A portfolio is not linked to a client. It holds positions only, so a portfolio is screened against
-a client chosen at request time (see section 8). Position weights must sum to at most 100, and
-every `fund_id` must exist. Any weight below 100 is treated as cash (portfolio 4 holds 10% cash).
+a client chosen at request time (see section 8). Position weights plus `cash_weight_pct` must not
+exceed 100, and every `fund_id` must exist. In the seed data each portfolio totals exactly 100.
+Portfolio 4 states its 10% cash explicitly, and cash is ignored by look-through screening because
+it holds no sector exposure.
 
 ### 4.4 Seed data
 
@@ -239,7 +289,13 @@ screening tool has something to find. The current seed data covers:
 | High fee and no ESG rating | Fund 6 (Active Thematic Equity) |
 | Highest risk rating, weakest ESG, fossil fuel, gambling and weapons holdings | Fund 7 (Frontier Markets) |
 | Look-through tobacco exposure (15% of Fund 2 gives 0.45%) | Portfolio 5 |
-| Portfolio with cash | Portfolio 4 |
+| Portfolio with cash | Portfolio 4 (`cash_weight_pct` 10.0) |
+
+Several documents point at these same cases without restating the numbers: documents 2, 9 and 22
+(Fund 2 tobacco), 4 and 23 (Fund 4 concentration), 5 and 14 (the Fund 5 / Client 5 boundary),
+6 and 24 (Fund 6 fee and unrated ESG), 7 and 25 (Fund 7). This is what makes the combined
+questions in section 12 answerable: the document says where to look, the record and screening
+supply the exact figure.
 
 ---
 
@@ -315,7 +371,10 @@ predict future returns, uses only supplied facts, and says so when information i
 
 ### 6.2 Summary endpoint
 
-`GET /funds/{id}/summary` returns a plain summary of the fund and includes token counts:
+`GET /funds/{id}/summary` returns a plain summary of the fund and includes token counts. The
+prompt data comes from the fund's record in `FUNDS` (fields, holdings, `NAV_per_share`, benchmark
+name, and `duration_years` and `yield_to_maturity_pct` for the bond fund). Say in the prompt that the
+holdings are top positions only and that no benchmark returns are supplied, so none may be quoted:
 
 ```json
 { "summary": "...", "input_tokens": 412, "output_tokens": 158 }
@@ -371,35 +430,71 @@ object). Optionally add `POST /tokens/estimate` using the provider's token count
 
 ### 7.1 Documents
 
-Write **at least 8** realistic documents, in the style professionals actually use:
+The knowledge base is the `DOCUMENTS` dict in `Data/docs.py`: **25 synthetic documents**, keyed by
+`id`, with `DOCUMENT_LIST` as a convenience list for indexing code. They are qualitative and
+temporal context for the records, not a second copy of them (see *Data flow* in section 2).
 
-1. Two fund factsheets (terse, tabular in prose form).
-2. Two quarterly manager commentaries (one explains an underperformance).
-3. One investment client agreement.
-4. One ESG and exclusions policy.
-5. One suitability rules summary.
-6. One fee and charges disclosure policy.
-7. More as desired (risk methodology, complaints handling).
+| `doc_type` | Count | ids | What it covers |
+|---|---|---|---|
+| `fund_mandate` | 7 | 1 to 7 | one per fund: objective, philosophy, process, benchmark, data limitations |
+| `commentary` | 2 | 8, 9 | quarterly manager commentary (Fund 1 Q1 2024; Fund 2 Q3 2023, an underperformance) |
+| `client_agreement` | 5 | 10 to 14 | one per client: the mandate restrictions in prose |
+| `policy` | 2 | 15, 17 | ESG and exclusions policy; restriction hierarchy and interpretation standard |
+| `rules` | 1 | 16 | suitability rules and product risk methodology |
+| `methodology` | 1 | 18 | risk and exposure reporting, including the look-through formula |
+| `disclosure` | 1 | 19 | fee and charges disclosure |
+| `glossary` | 1 | 20 | definitions and data limitations |
+| `risk_report` | 5 | 21 to 25 | 2024 risk reviews for Funds 1, 2, 4, 6 and 7 |
 
-Each document has: `id`, `title`, `doc_type`, `date`, `fund_id` (optional) and `text`. Dates matter,
-see 7.5. The documents live in `Data/docs.py` (currently a placeholder), separate from the records
-in `Data/records.py`.
+Each document has these fields:
+
+| Field | Notes |
+|---|---|
+| `id` | int, the dictionary key, also the id cited in answers |
+| `title` | str |
+| `doc_type` | one of the types above |
+| `document_date`, `effective_date`, `as_of_date` | `date` objects; they differ only for dated commentary and agreements, so decide which one drives staleness (7.5) |
+| `fund_id` | int or `None`; set on fund-specific documents |
+| `client_id` | int or `None`; set on client agreements |
+| `status` | `active` or `historical` (documents 8 and 9 are historical) |
+| `version` | str |
+| `authority` | who owns the content, e.g. `fund_management`, `client_mandate`, `firm_policy`, `investment_operations` |
+| `scope` | `fund`, `client` or `firm` |
+| `text` | the document body |
+
+Authoring rules the existing documents follow, and any new ones should too:
+
+- Do not state an exact figure that a record owns, unless the document is the source for it (a client
+  agreement may restate its own limits). Point to the record or to screening instead.
+- Never present the top-holdings list as the whole fund.
+- Never promise or forecast. Historical commentary carries an explicit "historical-use" caveat.
+
+Coverage is uneven on purpose. Every fund has a mandate document, only Funds 1 and 2 have
+commentary, and Funds 3 and 5 have no risk report. A question about a missing item (for example why
+Fund 7's NAV fell) should be answered as "insufficient evidence" or refused. Documents 24 and 25
+say this explicitly.
 
 ### 7.2 Indexing
 
-`POST /knowledge/index` reads all documents, embeds them with Voyage (document input type), and
-**upserts by document id** into a persistent Chroma collection, so re-running never duplicates.
-Store `doc_type`, `date` and `fund_id` as metadata. Return the number indexed.
+`POST /knowledge/index` reads every document in `DOCUMENTS`, embeds its `text` with Voyage (document
+input type), and **upserts by document id** into a persistent Chroma collection, so re-running never
+duplicates. Return the number indexed.
+
+Store these as Chroma metadata: `doc_type`, `document_date`, `as_of_date`, `fund_id`, `client_id`,
+`status`, `authority`, `scope` and `version`. Chroma accepts only strings, numbers and booleans as
+metadata values, so store dates as ISO strings and **leave out** a key whose value is `None` rather
+than writing it. A search result with no `fund_id` key then means "firm-wide or client document".
 
 Chunking decision: documents of one to two pages can be embedded whole, which keeps context
-intact. If a document exceeds roughly 500 words, split into chunks and store the source document
-id in metadata so citations still point at the whole document. Record your decision and reasoning
-in the design note.
+intact. The longest current document (document 1) is about 310 words, so **none of the 25 reaches the
+roughly 500-word threshold and all are embedded whole**. If a longer document is added, split it
+into chunks and store the source document id in metadata so citations still point at the whole
+document. Record your decision and reasoning in the design note.
 
 ### 7.3 Search only
 
 `POST /knowledge/search` embeds the query (query input type) and returns the top results with
-`id`, `title`, `score`, `date` and a text snippet. **No LLM call.** If the index is empty or not
+`id`, `title`, `doc_type`, `score`, `as_of_date`, `status` and a text snippet. **No LLM call.** If the index is empty or not
 built, return 409, not 500.
 
 Convert Chroma distance to a similarity score consistently and document the formula you used.
@@ -413,7 +508,9 @@ Convert Chroma distance to a similarity score consistently and document the form
    **without calling Claude**: `{"answer": null, "refused": true, "reason": "..."}`.
 3. Otherwise send only the passing passages to Claude with a system prompt that says: answer only
    from the passages, cite document ids in square brackets, say so if the passages are
-   insufficient.
+   insufficient. Include each passage's `as_of_date` and `status`, and tell the model that an exact
+   figure about a fund, client or portfolio must come from a record (via the agent's tools), not
+   from document prose.
 4. Return `answer`, `sources` (ids and titles used), `refused: false` and token counts.
 
 **Tuning the floor:** run 10 to 15 test questions (some clearly answerable, some clearly
@@ -427,14 +524,24 @@ keyword rule or a small dedicated model call) before retrieval.
 
 ### 7.5 Time sensitivity
 
-Fund commentary goes stale. For each result compute age in days. Flag results older than
-`STALE_AFTER_DAYS` with `"stale": true`, and either down-weight their score (for example multiply
-by 0.85) or show the warning. Tell the model the document date in the prompt so it can caveat
-("as of Q1"). Test with one deliberately old document.
+Fund commentary goes stale. For each result compute age in days from `as_of_date`. Flag results
+older than `STALE_AFTER_DAYS` with `"stale": true`, and either down-weight their score (for example
+multiply by 0.85) or show the warning. Tell the model the document date in the prompt so it can
+caveat ("as of Q1"). Documents with `status: "historical"` (8 and 9) should carry the warning
+whatever their age. Document 9 (Q3 2023) is the deliberately old test case.
+
+Choose the reference date for "age" deliberately. The seed documents are dated 2023 to 2024 and the
+records are a snapshot at 31 December 2024, so measured against today's date nearly every document
+would be stale. Either age documents against the latest `data_as_of_date` or accept that most
+are stale, and record the choice in the design note.
 
 ---
 
 ## 8. Mandate screening (deterministic core)
+
+Screening reads **only `records.py` data** (`FUNDS`, `CLIENTS`, `PORTFOLIOS`), never the documents.
+The documents explain these rules; the code applies them (documents 11, 16, 17 and 18 describe the
+conventions used below).
 
 `screening.py` exposes a pure function:
 
@@ -452,9 +559,20 @@ It checks, in code:
 | ESG | fund rating worse than `min_esg_rating` (define an ordering A > B > C > D) |
 | Fees | `ongoing_charge_pct > max_ongoing_charge_pct` |
 
+Conventions the documents rely on:
+
+- A value exactly equal to a limit is compliant. Only a value above the limit is a breach
+  (the Fund 5 / Client 5 boundary case).
+- A rule that is `None` on the client (no ESG minimum, no fee ceiling) is skipped.
+- `unrated` is not in the A > B > C > D ordering. Decide how it compares and test it. The
+  suggested rule is that it fails any minimum, so Fund 6 is flagged for a client with one.
+- Holdings are top positions only, so a clean result means "no breach among reported holdings",
+  not "zero exposure". Say so in the result and in any explanation.
+
 Return every breach with `rule`, `holding` (if any), `actual`, `limit` and a boolean overall
 `compliant`. Also implement `screen_portfolio(portfolio)` which looks through positions:
-effective exposure to a sector is the sum of `position_weight * holding_weight / 100`.
+effective exposure to a sector is the sum of `position_weight * holding_weight / 100`. Cash
+(`cash_weight_pct`) contributes nothing.
 
 Expose it as `GET /portfolios/{id}/screen?client_id=...`. The client is a query parameter because
 a portfolio does not store one. Unit test it thoroughly with plain data, no mocks
@@ -471,6 +589,11 @@ needed. This is the highest-value code in the project because compliance depends
 | `search_knowledge_base` | `query` | semantic search, returns top passages with ids and scores |
 | `screen_portfolio` | `client_id`, and `fund_id` or `portfolio_id` | runs the screening from section 8 on real records |
 | optional `get_fund` | `fund_id` | returns a fund's structured facts |
+
+Data sources: `search_knowledge_base` reads the document stream (`docs.py` via Chroma). `screen_portfolio`
+and `get_fund` read the record stream (`records.py`). The agent needs both for a question like "does
+fund X breach client Y's exclusion, and what does our policy say?", and its system prompt must tell
+it to take exact numbers from the record tools and policy wording from the search tool.
 
 Each has a JSON input schema with a clear description so the model knows when to use it.
 
@@ -574,7 +697,8 @@ or depend on the network in tests.
 
 | Area | What to prove |
 |---|---|
-| Screening | each rule triggers and clears correctly; look-through exposure maths |
+| Seed data integrity | each fund's `Percentage_of_fund_represented` equals its holdings sum and is at least 25; every holding sector is in `SECTORS`; every portfolio `fund_id` exists and positions plus cash do not exceed 100; every document's `fund_id` and `client_id` exist in the records; document ids match their dict keys |
+| Screening | each rule triggers and clears correctly; equality with a limit passes; `None` rules are skipped; `unrated` ESG; look-through exposure maths with and without cash |
 | CRUD and filters | create, read, update, delete, 404s, 422s, filter combinations |
 | Summary | mocked Claude returns text and token counts are passed through |
 | Refusal rule | nothing above the floor gives `refused: true` **and the mocked LLM is called zero times** |
@@ -620,7 +744,7 @@ to Voyage, Chroma and Claude.
 
 | Stage | Deliverable | Done when |
 |---|---|---|
-| 1 | Domain, data model, seed data, eight documents written | records and documents reviewed for realism |
+| 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass |
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass |
 | 3 | `screening.py` with unit tests | every rule tested |
 | 4 | Summary, streaming update, structured analysis | endpoints work against real Claude |
@@ -642,6 +766,9 @@ limiting; add a Dockerfile and compose file to run both projects.
 
 - Secrets committed to the repository (use environment variables and `.gitignore`).
 - Trusting the model for compliance or arithmetic instead of the screening code.
+- Answering an exact-number question from document prose instead of the record (the record wins).
+- Reading a clean result on top holdings as "zero exposure to that sector".
+- Writing `None` metadata values into Chroma (omit the key instead).
 - Not returning a tool result for every tool request in an agent turn.
 - Treating "no results found" as an error, or an error as "no results".
 - Embedding queries and documents with the same input type.
