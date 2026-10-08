@@ -26,7 +26,7 @@ def split_sentences(text: str) -> list[str]:
         if line.startswith('## '):
             units.append(line)
         else: 
-            units.extend(s for s in re.split(r"?<=[.!?]\s+", line) if s)
+            units.extend(s for s in re.split(r"(?<=[.!?])\s+", line) if s)
     return units
 
 
@@ -88,7 +88,7 @@ def by_section(doc: dict, max_words: int = 150, contextual: bool = True) -> list
     parts = re.split(r"(?m)^## ", doc["body"]) if "## " in doc["body"] else [doc["body"]]
 
     for part in parts:
-        heading, _, text = part.partition("\n" if "## " in doc["body"] else ("", "", part))
+        heading, _, text = part.partition("\n") if "## " in doc["body"] else ("", "", part)
         heading, text = heading.strip(), text.strip()
         if not text:
             continue
@@ -100,3 +100,25 @@ def by_section(doc: dict, max_words: int = 150, contextual: bool = True) -> list
             chunks.append(chunk(doc, number, piece))
             number += 1
     return chunks
+
+
+STRATEGIES = {
+    "whole_document": whole_document,
+    "fixed_100": lambda d: fixed_words(d, size = 100, overlap = 0),
+    "fixed_overlap_25": lambda d: fixed_words(d, size = 100, overlap = 25),
+    #"sentences_100": lambda d: sentence_packed(d, max_words = 100),
+    "sections_plain": lambda d: by_section(d, max_words = 150, contextual = False),
+    "sections_contextual": lambda d: by_section(d, max_words = 150, contextual = True)
+}
+
+def chunk_corpus(docs: list[dict], strategy: str) -> list[dict]:
+    return[chunk for doc in docs for chunk in STRATEGIES[strategy](doc)]
+
+
+# import chunking, corpus, documents
+
+
+# combine old and new docs
+
+
+# loop through and call chunk_corpus
