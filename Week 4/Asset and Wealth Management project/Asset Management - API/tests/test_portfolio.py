@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 #This code adds the project's "API" folder to Python's search path so the test file can find and import:
 #main.py (which contains the FastAPI app)
 #Data/records.py (which contains the PORTFOLIOS and FUNDS data)
+import pytest
 from fastapi.testclient import TestClient
 from main import app
 from Data.records import PORTFOLIOS, FUNDS
@@ -81,17 +82,12 @@ def test_add_portfolio():
     response = client.post("/portfolios", json=new_portfolio_data_2)
     assert response.status_code == 200
     data = response.json()
-    portfolio_id_2 = data["portfolio_id"]
-
-    # Verify client count increased by 2
+    # Verify portfolio count increased by 2
     assert len(PORTFOLIOS) == initial_count + 2
 
 
 def test_update_portfolio():
     """Test updating an existing portfolio"""
-    # Store original values for portfolio 1
-    original_portfolio = PORTFOLIOS[1].copy()
-
     # Test updating some positions
     update_data = {
         "positions": [
@@ -213,33 +209,35 @@ def test_portfolio_validation():
     assert response.status_code == 400  # Bad request
     assert "Total weight percentage" in response.json()["detail"]
 
-    # Test adding a portfolio with negative weight (Pydantic validation)
-    negative_weight_data = {
-        "positions": [
-            {"fund_id": 1, "weight_pct": -10.0},  # Negative weight
-            {"fund_id": 2, "weight_pct": 110.0}
-        ]
-    }
-
-    response = client.post("/portfolios", json=negative_weight_data)
-    assert response.status_code == 422  # Unprocessable Entity (Pydantic validation)
-
-    # Test adding a portfolio with weight over 100% (Pydantic validation)
-    over_weight_data = {
-        "positions": [
-            {"fund_id": 1, "weight_pct": 150.0}  # Over 100%
-        ]
-    }
-
-    response = client.post("/portfolios", json=over_weight_data)
-    assert response.status_code == 422  # Unprocessable Entity (Pydantic validation)
+    # Test a single weight below 0 or above 100 (Pydantic validation)
+    for weight in (-10.0, 150.0):
+        response = client.post("/portfolios", json={"positions": [{"fund_id": 1, "weight_pct": weight}]})
+        assert response.status_code == 422
 
 
-if __name__ == "__main__":
-    test_list_portfolios()
-    test_get_portfolio()
-    test_add_portfolio()
-    test_update_portfolio()
-    test_delete_portfolio()
-    test_portfolio_validation()
-    print("All tests passed!")
+def look_through_exposure(portfolio_id, sector):
+    """Effective exposure to a sector: the sum of position weight x holding weight / 100"""
+    portfolio = client.get(f"/portfolios/{portfolio_id}").json()
+    total = 0.0
+    for position in portfolio["positions"]:
+        fund = client.get(f"/funds/{position['fund_id']}").json()
+        for holding in fund["holdings"]:
+            if holding["sector"] == sector:
+                total += position["weight_pct"] * holding["weight_pct"] / 100
+    return total
+
+
+def test_seed_portfolios_are_valid():
+    """Every portfolio points at real funds and its positions plus cash total 100"""
+    for portfolio in client.get("/portfolios").json():
+        assert all(p["fund_id"] in FUNDS for p in portfolio["positions"])
+        total = sum(p["weight_pct"] for p in portfolio["positions"])
+        assert total + portfolio.get("cash_weight_pct", 0) == 100
+
+
+def test_look_through_exposure():
+    """Portfolio 5 holds 15% of Fund 2 (3% tobacco), so 0.45%. Portfolio 4's cash adds nothing.
+    A sector in no holding gives 0."""
+    assert look_through_exposure(5, "tobacco") == pytest.approx(0.45)
+    assert look_through_exposure(4, "fossil_fuels") == pytest.approx(30 * 4.8 / 100 + 10 * 17.5 / 100)
+    assert look_through_exposure(2, "tobacco") == 0

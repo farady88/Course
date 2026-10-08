@@ -56,8 +56,8 @@ def test_add_client():
     data = response.json()
 
     # Check that the client was created with an auto-generated ID
-    assert "id" in data
-    client_id = data["id"]
+    assert "client_id" in data
+    client_id = data["client_id"]
     assert client_id > 0
 
     # Check that all fields were set correctly
@@ -87,7 +87,6 @@ def test_add_client():
     response = client.post("/clients", json=new_client_data_empty)
     assert response.status_code == 200
     data = response.json()
-    client_id_2 = data["id"]
 
     # Check that None values are preserved
     assert data["client_name"] == "Test Client 2"
@@ -185,7 +184,7 @@ def test_delete_client():
     response = client.post("/clients", json=new_client_data)
     assert response.status_code == 200
     data = response.json()
-    client_id = data["id"]
+    client_id = data["client_id"]
 
     # Verify client was added
     assert client_id in CLIENTS
@@ -197,7 +196,7 @@ def test_delete_client():
     data = response.json()
 
     # Check that we got the deleted client back
-    assert data["id"] == client_id
+    assert data["client_id"] == client_id
     assert data["client_name"] == "Client to Delete"
 
     # Verify client was removed from CLIENTS
@@ -233,11 +232,74 @@ def test_sector_validation():
     response = client.put("/clients/1", json=invalid_update_data)
     assert response.status_code == 422  # Validation error
 
-if __name__ == "__main__":
-    test_list_clients()
-    test_get_client()
-    test_add_client()
-    test_update_client()
-    test_delete_client()
-    test_sector_validation()
-    print("All tests passed!")
+ESG_ORDER = {"A": 4, "B": 3, "C": 2, "D": 1}
+
+
+def breached_rules(client_id, fund_id):
+    """Apply the five mandate rules to API data and return the names of those breached.
+
+    A value equal to a limit is compliant, a rule set to None is skipped,
+    and an unrated fund fails any ESG minimum.
+    """
+    c = client.get(f"/clients/{client_id}").json()
+    fund = client.get(f"/funds/{fund_id}").json()
+    breaches = set()
+    if set(c["excluded_sectors"] or []) & {h["sector"] for h in fund["holdings"]}:
+        breaches.add("excluded_sector")
+    if fund["risk_rating"] > c["risk_tolerance"]:
+        breaches.add("risk")
+    if any(h["weight_pct"] > c["max_single_holding_pct"] for h in fund["holdings"]):
+        breaches.add("concentration")
+    if c["min_esg_rating"] is not None:
+        if ESG_ORDER.get(fund["esg_rating"], 0) < ESG_ORDER[c["min_esg_rating"]]:
+            breaches.add("esg")
+    if c["max_ongoing_charge_pct"] is not None:
+        if fund["ongoing_charge_pct"] > c["max_ongoing_charge_pct"]:
+            breaches.add("fee")
+    return breaches
+
+
+def test_clean_pairing():
+    """Fund 3 breaks none of Client 3's rules"""
+    assert breached_rules(3, 3) == set()
+
+
+def test_pairing_breaking_every_rule():
+    """Fund 2 breaks all five of Client 3's rules"""
+    assert breached_rules(3, 2) == {"excluded_sector", "risk", "concentration", "esg", "fee"}
+
+
+def test_excluded_sector_reports_weights():
+    """Client 3 excludes tobacco and fossil fuels, which Fund 2 holds at 3.0% and 4.8%"""
+    excluded = client.get("/clients/3").json()["excluded_sectors"]
+    holdings = client.get("/funds/2").json()["holdings"]
+    found = {h["sector"]: h["weight_pct"] for h in holdings if h["sector"] in excluded}
+    assert found == {"tobacco": 3.0, "fossil_fuels": 4.8}
+
+
+def test_concentration_breach():
+    """Fund 4's 12% holding breaches Client 2's 5% limit and nothing else"""
+    assert breached_rules(2, 4) == {"concentration"}
+
+
+def test_boundary_values_are_compliant():
+    """Fund 5 equals Client 5's limits on risk, fee and top holding, so nothing is breached"""
+    assert breached_rules(5, 5) == set()
+
+
+def test_unrated_fund_fails_esg_minimum():
+    """Fund 6 is unrated, so it fails Client 3's ESG minimum along with risk, concentration and fee"""
+    assert breached_rules(3, 6) == {"risk", "concentration", "esg", "fee"}
+
+
+def test_rules_set_to_none_are_skipped():
+    """Client 4 has no ESG minimum and no fee ceiling, so Fund 6 breaks nothing"""
+    client_4 = client.get("/clients/4").json()
+    assert client_4["min_esg_rating"] is None
+    assert client_4["max_ongoing_charge_pct"] is None
+    assert breached_rules(4, 6) == set()
+
+
+def test_highest_risk_fund():
+    """Fund 7 is above Client 4's risk tolerance and holds gambling, which Client 4 excludes"""
+    assert breached_rules(4, 7) == {"excluded_sector", "risk", "concentration"}

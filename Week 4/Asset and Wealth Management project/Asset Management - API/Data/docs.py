@@ -2,17 +2,17 @@
 
 Design principles
 -----------------
-1. Structured records in records.py are authoritative for exact numerical facts:
+1.Structured records in records.py are authoritative for exact numerical facts:
    current fund charges, risk ratings, ESG ratings, holdings, weights, clients and
    portfolio positions.
-2. These documents provide qualitative context: investment philosophy, process,
+2.These documents provide qualitative context: investment philosophy, process,
    risk methodology, benchmark definitions, performance attribution, mandates,
    policies and historical commentary.
-3. Every document carries explicit temporal and authority metadata so retrieval can
+3.Every document carries explicit temporal and authority metadata so retrieval can
    distinguish current snapshots from historical material.
-4. Documents do not claim that a partial top-holdings list represents the whole fund.
-5. Compliance decisions must remain deterministic in screening.py; these documents
-   explain the rules but never replace the screening engine.
+4.Documents do not claim that a partial top-holdings list represents the whole fund.
+5.Compliance decisions must remain deterministic in the mandate rules; these documents
+   explain the rules but never replace the mandate rules.
 
 All figures and entities are synthetic.
 """
@@ -40,49 +40,49 @@ DOCUMENTS = {
 INVESTMENT MANDATE AND PHILOSOPHY
 Effective 1 January 2024 | Information as of 31 December 2024
 
-Investment objective
+## Investment objective
 The fund seeks long-term capital growth through investment in a diversified
 portfolio of global equities. The mandate prioritises companies where the
 manager believes durable earnings growth is not fully reflected in market
 expectations.
 
-Investment philosophy
+## Investment philosophy
 The manager follows a fundamental, growth-oriented approach. The portfolio
 combines established businesses with emerging growth companies. Particular
 attention is given to companies with attractive long-term industry trends,
 strong competitive positions, credible management teams and the ability to
 reinvest capital at attractive rates.
 
-Investment process
+## Investment process
 The process has four stages:
-1. The team identifies structural growth themes and industries with attractive
+1.The team identifies structural growth themes and industries with attractive
    long-term economics.
-2. Individual companies are assessed using fundamental research, including
+2.Individual companies are assessed using fundamental research, including
    earnings prospects, competitive position, balance-sheet strength and
    management quality.
-3. Valuation is considered before a position is established; strong growth
+3.Valuation is considered before a position is established; strong growth
    alone is not sufficient reason to buy a security.
-4. Portfolio positions are reviewed as the investment thesis, valuation or
+4.Portfolio positions are reviewed as the investment thesis, valuation or
    risk changes.
 
-Portfolio construction
+## Portfolio construction
 The portfolio is intentionally tilted toward companies with attractive growth
 prospects. Technology and healthcare can become material sources of active
 risk when the manager's research supports those positions. Diversification
 across regions and industries is used to reduce dependence on any single
 economic outcome.
 
-Sell discipline
+## Sell discipline
 A position may be reduced or sold when the investment thesis deteriorates,
 valuation becomes difficult to justify, a better opportunity is identified,
 or portfolio risk becomes inconsistent with the mandate.
 
-Benchmark
+## Benchmark
 The fund reports against the Meridian Global Equity Growth Reference Index.
 The benchmark is a reference point for performance discussion; it does not
 mean that the portfolio must replicate the benchmark's holdings.
 
-Important limitation
+## Important limitation
 The structured fund record contains the reported top holdings only. The
 reported holdings therefore must not be treated as the fund's complete
 portfolio or complete sector allocation."""
@@ -105,18 +105,18 @@ portfolio or complete sector allocation."""
 INVESTMENT MANDATE AND RISK PROFILE
 Effective 1 January 2024 | Information as of 31 December 2024
 
-Investment objective
+## Investment objective
 The fund seeks long-term capital growth from companies operating in emerging
 markets. The manager accepts higher market, currency and political risk in
 exchange for access to companies and economies with higher structural growth
 potential.
 
-Investment philosophy
+## Investment philosophy
 The manager uses fundamental research with an emphasis on local market
 knowledge. Opportunities are assessed in the context of company fundamentals,
 industry structure, valuation, currency conditions and country-level risks.
 
-Key risk sources
+## Key risk sources
 The strategy is exposed to:
 - emerging-market equity volatility;
 - foreign-exchange movements;
@@ -125,25 +125,25 @@ The strategy is exposed to:
 - liquidity differences between markets;
 - concentrated country or sector opportunities.
 
-Investment process
+## Investment process
 The manager first assesses the attractiveness of an industry and local
 economic environment, then evaluates individual companies. Position sizing
 reflects conviction together with liquidity and country risk. The manager
 may reduce exposures when the fundamental thesis weakens or when portfolio
 risk becomes excessive.
 
-ESG and exclusions
+## ESG and exclusions
 The fund has an ESG rating recorded in the structured fund data. The portfolio
 also contains a reported 3% holding in Kestrel Tobacco Holdings. A portfolio
-manager must therefore use the deterministic screening service when checking
+manager must therefore use the deterministic mandate rules when checking
 this fund against a client-specific tobacco restriction.
 
-Benchmark
+## Benchmark
 The fund reports against the Meridian Emerging Markets Equity Reference Index.
 The benchmark is a comparison reference and does not establish suitability
 for a particular client.
 
-Important limitation
+## Important limitation
 The structured record contains top reported holdings rather than the complete
 portfolio. Absence of a sector from the reported list does not establish zero
 total exposure."""
@@ -166,34 +166,34 @@ total exposure."""
 INVESTMENT AND SUSTAINABILITY FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
-Investment objective
+## Investment objective
 The fund seeks long-term capital growth through global equities while
 integrating sustainability considerations into security selection.
 
-Investment philosophy
+## Investment philosophy
 The manager seeks businesses whose products, services and operating practices
 are considered compatible with long-term sustainable economic development.
 Financial quality remains part of the investment decision; a company is not
 selected solely because it has a strong sustainability profile.
 
-Sustainability process
+## Sustainability process
 The investment team considers material environmental, social and governance
 factors alongside traditional financial analysis. Companies are assessed for
 the quality of their business model, governance, sustainability practices and
 ability to manage material long-term risks.
 
-Portfolio construction
+## Portfolio construction
 The strategy favours companies contributing to areas such as renewable energy,
 efficient infrastructure, healthcare and enabling technologies. Diversification
 is maintained across industries and regions.
 
-Client-use note
+## Client-use note
 The structured record shows an ESG rating of A and reports no tobacco, weapons,
 fossil-fuel or gambling holdings among the listed positions. This is not, by
 itself, proof that the complete portfolio has zero exposure. Exact compliance
-against a client mandate must be determined by screening.py.
+against a client mandate must be determined by the mandate rules.
 
-Benchmark
+## Benchmark
 The fund reports against the Meridian Sustainable Global Equity Reference Index,
 a global equity comparison benchmark incorporating sustainability constraints."""
     },
@@ -215,38 +215,38 @@ a global equity comparison benchmark incorporating sustainability constraints.""
 FIXED INCOME INVESTMENT FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
-Investment objective
+## Investment objective
 The fund seeks income and capital stability through a diversified portfolio
 of government and corporate bonds.
 
-Investment process
+## Investment process
 The manager evaluates interest-rate conditions, sovereign fundamentals,
 corporate credit quality, spread compensation and liquidity. Portfolio
 construction balances income generation against duration and credit risk.
 
-Interest-rate risk
+## Interest-rate risk
 Duration is a key measure of sensitivity to changes in interest rates. A
 longer duration generally means that a bond portfolio is more sensitive to
 changes in market yields. The structured record reports a duration figure for
 this fund as of the portfolio snapshot.
 
-Credit risk
+## Credit risk
 Government and corporate issuers can contribute different sources of risk.
 Corporate positions introduce issuer and credit-spread risk in addition to
 general interest-rate risk.
 
-Concentration
+## Concentration
 The structured record deliberately contains a 12% reported position in
 Government of Alderland. This is important when testing client concentration
-limits. The deterministic screening service, rather than the LLM, decides
+limits. The deterministic mandate rules, rather than the LLM, decide
 whether that position breaches a particular client's limit.
 
-Benchmark
+## Benchmark
 The fund reports against the Meridian Global Government and Corporate Bond
 Reference Index, a global government and investment-grade corporate bond
 benchmark.
 
-Important limitation
+## Important limitation
 The listed securities are reported top positions and do not constitute a
 complete maturity, duration, credit-quality or issuer breakdown."""
     },
@@ -268,29 +268,29 @@ complete maturity, duration, credit-quality or issuer breakdown."""
 STRATEGIC ALLOCATION FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
-Investment objective
+## Investment objective
 The fund seeks balanced long-term capital growth and income by combining
 different asset and risk exposures.
 
-Investment approach
+## Investment approach
 The manager combines equities, government securities, property-related
 exposure and other diversified investments. Allocation decisions consider
 economic conditions, valuation, expected returns and portfolio risk.
 
-Role in a portfolio
+## Role in a portfolio
 The strategy is designed to provide a middle ground between a concentrated
 equity strategy and a capital-preservation strategy. Diversification can
 reduce dependence on a single asset class, but it does not eliminate market
 risk.
 
-Concentration and mandate use
+## Concentration and mandate use
 The structured record reports a 5% position in Government of Alderland. It is
 also deliberately configured so that its risk rating, fee and reported top
 holding can sit exactly at the limits used in Client 5's screening test.
-The screening engine treats a value equal to a client's maximum as compliant;
+The mandate rules treat a value equal to a client's maximum as compliant;
 only a value above the limit is a breach.
 
-Benchmark
+## Benchmark
 The fund reports against the Meridian Balanced Multi-Asset Reference
 Benchmark, a strategic multi-asset comparison benchmark."""
     },
@@ -312,33 +312,33 @@ Benchmark, a strategic multi-asset comparison benchmark."""
 THEMATIC INVESTMENT FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
-Investment objective
+## Investment objective
 The fund seeks long-term capital growth from companies expected to benefit
 from structural themes such as artificial intelligence, automation, digital
 payments, healthcare innovation and connected infrastructure.
 
-Investment philosophy
+## Investment philosophy
 The strategy accepts greater company and theme concentration than a broad
 global equity portfolio. The manager looks for businesses with strong
 exposure to a long-duration structural theme and evidence that the theme can
 translate into sustainable commercial growth.
 
-Risk characteristics
+## Risk characteristics
 Thematic investing can create significant concentration in particular
 industries, technologies and valuation regimes. Theme popularity can also
 lead to rapid changes in market expectations.
 
-ESG information
+## ESG information
 The structured record currently classifies the fund as ESG unrated. Unrated
 does not mean either good or bad ESG performance; it means the record does
 not assign an A-D rating. Where a client has a minimum ESG rating requirement,
-the screening service must apply that rule explicitly.
+the mandate rules must apply that rule explicitly.
 
-Cost
+## Cost
 The fund has a comparatively high ongoing charge in the structured records.
 Exact fee compliance is a deterministic check, not an LLM judgement.
 
-Benchmark
+## Benchmark
 The fund reports against the Meridian Active Thematic Equity Reference Index."""
     },
 
@@ -359,11 +359,11 @@ The fund reports against the Meridian Active Thematic Equity Reference Index."""
 FRONTIER MARKETS RISK FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
-Investment objective
+## Investment objective
 The fund seeks long-term capital growth from companies in frontier markets,
 accepting substantial volatility, liquidity and country risk.
 
-Key risk sources
+## Key risk sources
 The strategy can be affected by:
 - political and regulatory instability;
 - foreign-exchange movements;
@@ -373,20 +373,20 @@ The strategy can be affected by:
 - governance and disclosure differences;
 - abrupt changes in investor risk appetite.
 
-Portfolio characteristics
+## Portfolio characteristics
 The structured record deliberately contains fossil-fuel, gambling and weapons
 holdings and carries the highest fund risk rating in the seed data. These
 facts are relevant to client screening but do not by themselves determine
 whether a particular client can hold the fund.
 
-ESG
+## ESG
 The structured record classifies the fund as ESG rating D. Client-specific
 minimum ESG requirements must be checked against that structured value.
 
-Benchmark
+## Benchmark
 The fund reports against the Meridian Frontier Markets Reference Index.
 
-Important limitation
+## Important limitation
 The listed holdings are not the complete portfolio. Do not infer zero
 exposure to a sector merely because that sector is absent from the listed
 positions."""
@@ -415,24 +415,24 @@ As of 31 March 2024
 The fund's NAV per share increased from £3.65 at year-end 2023 to £3.82 by
 31 March 2024, representing a reported quarterly return of 4.7%.
 
-Performance drivers
+## Performance drivers
 Technology holdings were the principal source of outperformance. Northbridge
 Software and Aurelia Semiconductors benefited from strong earnings reports
 and positive industry trends. The fund's overweight position in healthcare
 also contributed positively, with Helix Biopharma exceeding expectations.
 
-Geographic contribution
+## Geographic contribution
 U.S. and European exposures were reported as the strongest performers, while
 Asian markets showed more modest gains. The manager attributed part of the
 fund's resilience to global diversification.
 
-Manager outlook
+## Manager outlook
 The manager remained confident in the growth-oriented approach and continued
 to see opportunities in innovation-driven sectors. The portfolio was described
 as maintaining a balance between established leaders and emerging growth
 companies.
 
-Interpretation rule
+## Interpretation rule
 These statements describe the manager's view at the date of the commentary.
 They are historical commentary and must not be presented as a current
 forecast or guarantee of future performance."""
@@ -458,26 +458,26 @@ As of 30 September 2023
 The NAV per share declined from £2.58 to £2.51 during the quarter, a reported
 2.7% decrease.
 
-Performance attribution
-1. Commodity price volatility affected materials and energy exposure. The
+## Performance attribution
+1.Commodity price volatility affected materials and energy exposure. The
    commentary identifies Costa Verde Mining and Pampas Energy as part of the
    affected exposure.
-2. Currency headwinds affected emerging-market holdings as local currencies
+2.Currency headwinds affected emerging-market holdings as local currencies
    came under pressure against the U.S. dollar.
-3. Geopolitical tensions contributed to risk-off sentiment.
-4. Technology exposure, including Jade Dragon Electronics, performed
+3.Geopolitical tensions contributed to risk-off sentiment.
+4.Technology exposure, including Jade Dragon Electronics, performed
    adequately but did not offset weakness elsewhere.
 
-Portfolio actions
+## Portfolio actions
 The manager reported reducing materials exposure from 9.0% to 5.4% and
 increasing telecommunications weighting to improve defensive characteristics.
 
-ESG
+## ESG
 The manager explicitly noted the fund's 3% tobacco exposure. This historical
 commentary should be read alongside the current structured holdings and the
 current ESG/exclusions policy when assessing a mandate.
 
-Historical-use warning
+## Historical-use warning
 This document explains the manager's Q3 2023 view. It is not evidence that
 the same exposures or market conditions still apply at a later date."""
     },
@@ -502,32 +502,32 @@ the same exposures or market conditions still apply at a later date."""
 HARRINGTON FAMILY TRUST - CLIENT ID 1
 Effective 15 June 2020
 
-Objective
+## Objective
 The mandate seeks long-term growth for a multi-generational family trust.
 
-Restrictions
+## Restrictions
 - Risk tolerance: 5 on a 1-7 scale.
 - Excluded sectors: tobacco and weapons.
 - Maximum single holding: 8.0%.
 - Minimum ESG rating: B.
 - Maximum ongoing charge: 1.00%.
 
-Service
+## Service
 Meridian Asset Management Advisors provides portfolio construction, ongoing
 management and performance reporting.
 
-Fees
+## Fees
 The advisory fee is 0.25% annually of assets under management, payable
 quarterly in arrears. This advisory fee is separate from fund-level ongoing
 charges.
 
-Reporting and review
+## Reporting and review
 The client receives quarterly performance reports and an annual comprehensive
 review.
 
-Mandate interpretation
+## Mandate interpretation
 The restrictions above are client-specific. They are not merely descriptions
-of the client's preferences. Where the screening engine checks a fund or
+of the client's preferences. Where the mandate rules check a fund or
 portfolio against Client 1, these restrictions are the applicable client
 limits."""
     },
@@ -549,18 +549,18 @@ limits."""
 CLIENT MANDATE SUMMARY - CLIENT ID 2
 Effective 5 January 2024
 
-Objective
+## Objective
 The scheme prioritises capital preservation and cost control for a closed
 defined-benefit pension arrangement.
 
-Investment parameters
+## Investment parameters
 - Maximum fund risk rating: 3.
 - No client-specific sector exclusions.
 - Maximum single holding: 5.0%.
 - No minimum ESG rating specified in the client record.
 - Maximum ongoing charge: 0.60%.
 
-Interpretation
+## Interpretation
 The absence of an ESG minimum does not mean ESG is irrelevant; it means this
 client record does not impose an additional ESG threshold. Firm-wide policy
 and other applicable restrictions remain relevant.
@@ -586,19 +586,19 @@ with a limit is not a breach; a value above the limit is a breach."""
 CLIENT MANDATE SUMMARY - CLIENT ID 3
 Effective 8 January 2024
 
-Objective
+## Objective
 The foundation manages a charitable endowment and funds grants from investment
 income. It therefore combines moderate risk tolerance with a strict ethical
 mandate.
 
-Investment parameters
+## Investment parameters
 - Maximum fund risk rating: 4.
 - Excluded sectors: tobacco, weapons, fossil fuels and gambling.
 - Maximum single holding: 6.0%.
 - Minimum ESG rating: B.
 - Maximum ongoing charge: 0.80%.
 
-Interpretation
+## Interpretation
 The sector exclusions are cumulative. A fund containing a reported holding
 from any excluded sector requires deterministic screening before a compliance
 conclusion is made.
@@ -624,23 +624,23 @@ policy where applicable."""
 CLIENT MANDATE SUMMARY - CLIENT ID 4
 Effective 10 January 2024
 
-Objective
+## Objective
 The family office has a high risk appetite and seeks long-term growth.
 
-Investment parameters
+## Investment parameters
 - Maximum fund risk rating: 6.
 - Excluded sector: gambling.
 - Maximum single holding: 10.0%.
 - No minimum ESG rating specified.
 - No maximum ongoing charge specified.
 
-Interpretation
+## Interpretation
 The lack of a fee ceiling does not imply that costs should be ignored in
 investment analysis. It means that this client record does not impose a
 deterministic maximum fee rule.
 
 The gambling exclusion remains a hard client restriction and must be checked
-by the screening service."""
+by the mandate rules."""
     },
 
     14: {
@@ -660,18 +660,18 @@ by the screening service."""
 CLIENT MANDATE SUMMARY - CLIENT ID 5
 Effective 12 January 2024
 
-Objective
+## Objective
 The client is approaching retirement and has a moderate risk profile. The
 client specifically excludes tobacco for personal reasons.
 
-Investment parameters
+## Investment parameters
 - Maximum fund risk rating: 4.
 - Excluded sector: tobacco.
 - Maximum single holding: 5.0%.
 - Minimum ESG rating: C.
 - Maximum ongoing charge: 1.10%.
 
-Boundary conditions
+## Boundary conditions
 The mandate is deliberately configured so that Meridian Balanced Multi-Asset
 sits exactly at several limits: risk rating 4, ongoing charge 1.10% and a
 reported 5.0% top holding. The screening convention is that a value equal to
@@ -698,17 +698,17 @@ a maximum is permitted; only a value above the maximum breaches it."""
 ESG AND EXCLUSIONS POLICY
 Effective 10 January 2023
 
-Purpose
+## Purpose
 Meridian integrates ESG considerations with traditional financial analysis.
 
-ESG rating framework
+## ESG rating framework
 - A: Excellent
 - B: Good
 - C: Moderate
 - D: Below Average
 - Unrated: insufficient data for an A-D rating.
 
-Baseline exclusions
+## Baseline exclusions
 Unless a client mandate or other applicable rule requires a stricter
 restriction, Meridian applies:
 - Tobacco: 0% revenue threshold.
@@ -716,19 +716,19 @@ restriction, Meridian applies:
   equipment.
 - Thermal coal used for electricity generation: 10% revenue threshold.
 
-Monitoring
+## Monitoring
 ESG ratings are reviewed quarterly. Exclusion compliance is monitored daily
 through automated screening. A detected violation triggers immediate review
 and normally requires divestment within five business days.
 
-Client-specific restrictions
+## Client-specific restrictions
 A client may have restrictions that are stricter than the baseline policy.
 The client's mandate must therefore be considered alongside this policy.
 
-Important distinction
+## Important distinction
 This policy defines the firm's framework. It does not calculate whether an
 individual fund or portfolio breaches a client mandate. That determination is
-performed by the deterministic screening service using structured records."""
+performed by the deterministic mandate rules using structured records."""
     },
 
     16: {
@@ -748,41 +748,41 @@ performed by the deterministic screening service using structured records."""
 SUITABILITY RULES AND PRODUCT RISK METHODOLOGY
 Effective 2 January 2024
 
-Client risk tolerance
+## Client risk tolerance
 Client risk tolerance is recorded on a 1-7 scale and represents the highest
 fund risk rating permitted by the seed-data suitability rules.
 
-Risk bands
+## Risk bands
 - 1-2: Conservative
 - 3-4: Moderate
 - 5-6: Aggressive
 - 7: Very Aggressive
 
-Fund risk rating
+## Fund risk rating
 Fund risk ratings are also recorded from 1 to 7. The classification considers
 the fund's broad investment strategy and the principal market risks associated
 with that strategy. The rating is a product classification, not a forecast of
 future returns and not a guarantee of realised volatility.
 
-Suitability mapping
+## Suitability mapping
 - Client risk 1-2: funds rated 1-2.
 - Client risk 3-4: funds rated 1-4.
 - Client risk 5-6: funds rated 1-6.
 - Client risk 7: funds rated 1-7.
 
-Other suitability rules
+## Other suitability rules
 Recommendations must also comply with:
 - client-specific sector exclusions;
 - maximum single-holding concentration;
 - minimum ESG rating where specified;
 - maximum ongoing charge where specified.
 
-Deterministic implementation
-The screening service compares exact structured values against these rules.
+## Deterministic implementation
+The mandate rules compare exact structured values against these rules.
 The language model may explain a screening result but must never replace the
 screening calculation.
 
-Suitability is not a buy recommendation
+## Suitability is not a buy recommendation
 A fund passing these mechanical checks is not automatically suitable in every
 respect. A suitability assessment may require financial circumstances,
 capacity for loss, time horizon, knowledge and experience and other information
@@ -806,38 +806,38 @@ outside this synthetic dataset."""
 INVESTMENT RESTRICTION HIERARCHY
 Effective 3 January 2024
 
-Purpose
+## Purpose
 This standard explains how the knowledge system should interpret overlapping
 investment restrictions.
 
-Priority order
-1. Applicable legal or regulatory requirements.
-2. Firm-wide mandatory policy.
-3. Client-specific contractual restrictions.
-4. Fund-specific investment mandate.
-5. Portfolio construction preferences and qualitative objectives.
+## Priority order
+1.Applicable legal or regulatory requirements.
+2.Firm-wide mandatory policy.
+3.Client-specific contractual restrictions.
+4.Fund-specific investment mandate.
+5.Portfolio construction preferences and qualitative objectives.
 
-Stricter-rule principle
+## Stricter-rule principle
 Where two applicable restrictions differ and both are valid, the stricter
 applicable restriction should not be ignored merely because another document
 is less restrictive.
 
-Client versus firm policy
+## Client versus firm policy
 A client mandate can impose additional restrictions. A client document should
 not be interpreted as permitting conduct prohibited by a mandatory firm rule.
 
-Structured-data precedence
+## Structured-data precedence
 Where a current structured record conflicts with descriptive prose in a
 document, exact compliance calculations must use the current structured
 record. The document should be treated as qualitative or historical context
 unless it is explicitly the authoritative source for the relevant rule.
 
-Temporal precedence
+## Temporal precedence
 A newer active document supersedes an older document when both address the
 same policy or mandate, unless the older document is explicitly preserved for
 historical interpretation.
 
-LLM rule
+## LLM rule
 The LLM must state when the retrieved evidence is insufficient to determine
 which restriction applies. It must not invent a hierarchy or infer an
 exception that is not documented."""
@@ -860,38 +860,38 @@ exception that is not documented."""
 FUND RISK AND EXPOSURE REPORTING METHODOLOGY
 Effective 4 January 2024
 
-Reported holdings
+## Reported holdings
 Fund records contain selected top holdings. The percentage labelled
 Percentage_of_fund_represented states how much of the fund those listed
 holdings represent. It does not imply that unlisted holdings have zero
 weight.
 
-Sector exposure
+## Sector exposure
 A sector total may only be described as a complete fund-level sector exposure
 when a complete holdings dataset or an explicit aggregate exposure field is
 available. Summing listed holdings can establish a minimum represented
 exposure, not necessarily total exposure.
 
-Look-through portfolios
+## Look-through portfolios
 For a portfolio position with weight P and a fund holding with weight H, the
 effective portfolio exposure is calculated as:
 
     P * H / 100
 
-The screening code performs this arithmetic. The LLM should explain the
+The mandate rules perform this arithmetic. The LLM should explain the
 result rather than calculate it.
 
-Concentration
+## Concentration
 A single holding is compared directly with the client's maximum holding
 percentage. Equality with the maximum is permitted under the current
 screening convention.
 
-Fixed income
+## Fixed income
 For bond funds, duration provides a measure of sensitivity to interest-rate
 changes. Yield-to-maturity is a portfolio-level indicator and should not be
 treated as a guaranteed future return.
 
-Data limitations
+## Data limitations
 If the structured data does not provide a complete exposure, maturity,
 duration, credit-quality or geographic breakdown, the knowledge system must
 say that the requested figure is unavailable rather than infer it from the
@@ -915,7 +915,7 @@ top holdings."""
 FEE AND CHARGES DISCLOSURE POLICY
 Effective 20 May 2023
 
-Fund-level charges
+## Fund-level charges
 For each managed fund, Meridian distinguishes:
 - Ongoing Charge Figure: recurring management, administration and operational
   costs represented by the fund-level charge.
@@ -923,22 +923,22 @@ For each managed fund, Meridian distinguishes:
 - Incidental costs: performance fees or other irregular charges where
   applicable.
 
-Service-level charges
+## Service-level charges
 Advisory and management services may have separate fees. A client agreement
 can therefore contain an advisory fee that is additional to the fund's
 ongoing charge.
 
-Interpretation
+## Interpretation
 When comparing a fund against a client's maximum ongoing charge, use the
 structured fund record's ongoing_charge_pct. Do not add a client advisory
 fee to the fund OCF unless the question specifically asks for total client
 cost.
 
-Disclosure principle
+## Disclosure principle
 Fees should be presented clearly and updated when the applicable fee schedule
 changes.
 
-Important limitation
+## Important limitation
 This policy explains fee terminology and disclosure. It is not the
 authoritative source for the current numerical fee of an individual fund;
 the current structured fund record is used for deterministic screening."""
@@ -961,46 +961,46 @@ the current structured fund record is used for deterministic screening."""
 DEFINITIONS AND DATA LIMITATIONS
 Effective 5 January 2024
 
-Risk tolerance
+## Risk tolerance
 The maximum fund risk rating permitted by the current synthetic suitability
 rules for a client.
 
-Risk rating
+## Risk rating
 A 1-7 product risk classification assigned to a fund. It is not a guaranteed
 measure of realised volatility.
 
-ESG rating
+## ESG rating
 A-D sustainability classification. Unrated means no A-D rating is assigned.
 
-Ongoing charge
+## Ongoing charge
 The fund-level recurring charge represented by ongoing_charge_pct in the
 structured record.
 
-Benchmark
+## Benchmark
 A reference index or benchmark used to contextualise fund performance. A
 benchmark is not automatically a target portfolio or a suitability rule.
 
-Top holdings
+## Top holdings
 The listed holdings in a fund record are selected reported positions, not
 necessarily the entire portfolio.
 
-Look-through exposure
+## Look-through exposure
 The effective exposure of a portfolio to an underlying holding or sector
 after accounting for the portfolio's allocation to the fund.
 
-Client mandate
+## Client mandate
 The documented investment restrictions and objectives applicable to a client.
 
-Screening result
+## Screening result
 A deterministic result produced from structured records. It is the source
-of truth for the mechanical compliance checks implemented by screening.py.
+of truth for the mechanical compliance checks implemented by the mandate rules.
 
-Historical commentary
+## Historical commentary
 A manager's explanation of conditions and decisions at a particular date.
 Historical commentary must not be presented as current information without
 an appropriate date caveat.
 
-Data limitation rule
+## Data limitation rule
 The absence of information is not evidence of zero exposure, zero risk or
 compliance. If the records and retrieved documents do not establish an
 answer, the knowledge system should say that the evidence is insufficient."""
@@ -1026,7 +1026,7 @@ answer, the knowledge system should say that the evidence is insufficient."""
 2024 RISK AND POSITIONING REVIEW
 As of 31 December 2024
 
-Principal active-risk themes
+## Principal active-risk themes
 The fund's principal active-risk themes during 2024 were growth exposure,
 technology concentration and the relative performance of U.S. and European
 equities.
@@ -1035,17 +1035,17 @@ The manager considers technology and healthcare important sources of return
 potential, while recognising that concentration in growth industries can
 increase sensitivity to valuation changes and earnings expectations.
 
-Portfolio construction
+## Portfolio construction
 The fund uses multiple positions rather than relying on a single company.
 The structured holdings report should be used for exact current weights.
 The listed positions represent only part of the fund.
 
-Risk interpretation
+## Risk interpretation
 A risk rating of 5 places the fund in the aggressive band under Meridian's
 suitability methodology. This classification should not be translated into a
 specific expected return or volatility figure.
 
-Benchmark context
+## Benchmark context
 Performance should be discussed relative to the Meridian Global Equity Growth
 Reference Index where benchmark-relative data is available. The current
 knowledge base does not contain a complete numerical benchmark-return series,
@@ -1069,22 +1069,22 @@ so the system must not invent one."""
 2024 RISK AND POSITIONING REVIEW
 As of 31 December 2024
 
-Principal risks
+## Principal risks
 The fund's principal risk sources are emerging-market equity volatility,
 currency movements, commodity exposure, political risk and differences in
 market liquidity.
 
-Positioning
+## Positioning
 The reported portfolio contains technology, financials, materials, energy,
 telecommunications, consumer and tobacco exposure. Exact weights must be
 taken from the current structured record.
 
-ESG and exclusions
+## ESG and exclusions
 The reported 3% tobacco position is a material fact for mandate screening.
-A client with a tobacco exclusion should therefore be checked through the
-deterministic screening endpoint rather than assessed by the language model.
+A client with a tobacco exclusion should therefore be checked against the
+deterministic mandate rules rather than assessed by the language model.
 
-Historical context
+## Historical context
 The Q3 2023 manager commentary provides historical explanations for
 commodity, currency and geopolitical weakness. It should not be treated as
 a current market forecast."""
@@ -1107,26 +1107,26 @@ a current market forecast."""
 2024 FIXED INCOME RISK REPORT
 As of 31 December 2024
 
-Rate sensitivity
+## Rate sensitivity
 The structured record reports portfolio duration of 5.2 years. Duration is
 an indicator of sensitivity to changes in interest rates; it is not a
 guaranteed loss or return for a particular rate move.
 
-Income
+## Income
 The structured record reports a 4.1% yield-to-maturity. Yield-to-maturity is
 a portfolio-level measure based on current holdings and assumptions. It is
 not a promise that an investor will earn exactly 4.1%.
 
-Concentration
+## Concentration
 The reported top position is Government of Alderland at 12.0%. This is
 relevant to clients with concentration limits.
 
-Credit and issuer risk
+## Credit and issuer risk
 Corporate bonds introduce credit and spread risk in addition to general
 interest-rate risk. Government holdings can introduce sovereign and currency
 risk.
 
-Data limitation
+## Data limitation
 The knowledge base does not contain a complete maturity ladder, credit-rating
 distribution or currency breakdown. Those measures should not be inferred
 from the listed top holdings."""
@@ -1149,22 +1149,22 @@ from the listed top holdings."""
 2024 THEMATIC RISK REVIEW
 As of 31 December 2024
 
-Thematic concentration
+## Thematic concentration
 The reported holdings are concentrated in technology and companies associated
 with technology-enabled growth themes. This can make the fund more sensitive
 to changes in valuation, adoption expectations and investor sentiment.
 
-Performance profile
+## Performance profile
 The structured NAV series shows an increase in Q2 followed by declines in Q3
 and Q4. The knowledge base does not contain a formal quarter-by-quarter
 performance attribution report for the full year, so the system must not
 invent specific causes for those movements.
 
-ESG
+## ESG
 The fund is recorded as unrated. Unrated is a data classification and should
 not be interpreted as an ESG score.
 
-Cost
+## Cost
 The fund has a 2.25% ongoing charge in the structured record. Whether that
 fee is acceptable depends on the client's mandate and the applicable
 screening rule."""
@@ -1187,25 +1187,25 @@ screening rule."""
 2024 FRONTIER MARKETS RISK REVIEW
 As of 31 December 2024
 
-Risk classification
+## Risk classification
 The fund has the highest risk rating in the structured seed data. Frontier
 market exposure can involve elevated liquidity, currency, political,
 regulatory and governance risks.
 
-Reported sector exposures
+## Reported sector exposures
 The listed holdings include fossil fuels, financials, telecommunications,
 materials, gambling and weapons. These reported positions are particularly
 relevant to client mandates containing ethical exclusions.
 
-Performance context
+## Performance context
 The structured NAV series shows a decline through Q3 followed by a partial
 recovery in Q4. The knowledge base does not contain a detailed attribution
 report for this fund, so a question asking exactly why those quarterly
 movements occurred should be answered as insufficiently supported.
 
-Screening
+## Screening
 The exact impact of the reported holdings, risk rating and ESG rating on a
-client mandate must be determined using the screening engine."""
+client mandate must be determined using the mandate rules."""
     },
 }
 

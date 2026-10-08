@@ -62,14 +62,14 @@ All data starts in two files under `Data/`, and each one has a single job:
 
 The documents deliberately do not duplicate every structured fact, and they never decide
 compliance. Several of them say so in their own text (for example, "exact compliance must be
-determined by `screening.py`").
+determined by deterministic screening"), meaning the mandate rules in section 8 applied to records.
 
 ```
 records.py (FUNDS, CLIENTS, PORTFOLIOS)
     -> routers (CRUD, filters, read-only funds)        structured lookups
-    -> screening.py (deterministic rules)              compliance facts
+    -> mandate rules (section 8), checked by the tests  compliance facts
     -> llm.py (summary, streaming, client-fit)         record fields go into the prompt
-    -> agent tools: get_fund, screen_portfolio
+    -> agent tools: get_fund, check_mandate
 
 docs.py (DOCUMENTS)
     -> knowledge_store.index: embed with Voyage (document type), upsert into Chroma
@@ -78,7 +78,7 @@ docs.py (DOCUMENTS)
     -> agent tool: search_knowledge_base
 ```
 
-The two streams meet only in the places that need both: `/insights/client-fit` (screening result
+The two streams meet only in the places that need both: `/insights/client-fit` (mandate-rule result
 from records, supporting passages from documents) and the agent (one tool per stream).
 
 **Precedence rule.** When a document and a record disagree, the record wins for exact numbers
@@ -119,11 +119,11 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **Agent**
 - *What:* A loop in which the model chooses a tool, sees the result, and repeats until it can answer.
-- *Here:* `agent.py` lets Claude combine `search_knowledge_base` and `screen_portfolio` to answer multi-part questions. A hard `AGENT_MAX_ITERATIONS` limit stops runaway loops, and every tool runs safely, returning an error message and never raising.
+- *Here:* `agent.py` lets Claude combine `search_knowledge_base` and `check_mandate` to answer multi-part questions. A hard `AGENT_MAX_ITERATIONS` limit stops runaway loops, and every tool runs safely, returning an error message and never raising.
 
-**Deterministic screening**
+**Deterministic mandate rules**
 - *What:* Ordinary code that checks exact rules on exact numbers.
-- *Here:* `screening.py` checks excluded sectors, risk, concentration, ESG and fees. Its result is the source of truth for compliance, and the model may only explain it.
+- *Here:* The rules in section 8 cover excluded sectors, risk, concentration, ESG and fees. They are pinned down by the tests in `test_clients.py`, `test_funds.py` and `test_portfolio.py`. Their result is the source of truth for compliance, and the model may only explain it.
 
 **FastAPI and Pydantic**
 - *What:* FastAPI is a Python web framework. Pydantic validates data against typed models.
@@ -150,10 +150,13 @@ Asset Management - API/
   llm.py                  Claude client, summary, streaming, structured analysis
   knowledge_store.py      Chroma + Voyage: index, search
   agent.py                tool-use loop and tools
-  screening.py            deterministic client mandate screening logic
   routers/
-    funds.py  clients.py  portfolios.py  insights.py  knowledge.py  agent.py
+    funds.py  clients.py  portfolio.py  insights.py  knowledge.py  agent.py
   tests/
+    test_funds.py         fund CRUD reads, record integrity, seed edge cases
+    test_clients.py       client CRUD and validation, mandate rules on client/fund pairs
+    test_portfolio.py     portfolio CRUD and validation, seed portfolios, look-through exposure
+    conftest.py           restores CLIENTS and PORTFOLIOS after every test
   requirements.txt
   README.md
 Asset Management - UI/
@@ -162,7 +165,7 @@ Asset Management - UI/
   README.md
 ```
 
-Keep business logic (`screening.py`, `agent.py`, `llm.py`) free of FastAPI imports so it can be
+Keep business logic (`agent.py`, `llm.py`) free of FastAPI imports so it can be
 tested directly. Routers only translate HTTP to function calls and errors to status codes.
 
 ---
@@ -229,7 +232,7 @@ maturity year (for example "Government of Alderland"). Sectors come from the fix
 
 The benchmark fields and `data_as_of_date` name the comparison framework and the point in time.
 The records contain no benchmark return series, so the system must not invent benchmark-relative
-performance. Screening facts stay in the numeric fields above, which are authoritative.
+performance. Mandate-rule facts stay in the numeric fields above, which are authoritative.
 
 `NAV_per_share` is the net asset value of one share at the end of each of four consecutive
 quarters, labelled `Q1` (oldest) to `Q4` (latest). It lets a fund's trend be seen and assessed
@@ -269,16 +272,16 @@ Example:
 | `positions` | list | each: `fund_id`, `weight_pct` |
 | `cash_weight_pct` | float, optional | cash held outside any fund; absent means 0 |
 
-A portfolio is not linked to a client. It holds positions only, so a portfolio is screened against
+A portfolio is not linked to a client. It holds positions only, so a portfolio is checked against
 a client chosen at request time (see section 8). Position weights plus `cash_weight_pct` must not
 exceed 100, and every `fund_id` must exist. In the seed data each portfolio totals exactly 100.
-Portfolio 4 states its 10% cash explicitly, and cash is ignored by look-through screening because
+Portfolio 4 states its 10% cash explicitly, and cash is ignored by look-through exposure because
 it holds no sector exposure.
 
 ### 4.4 Seed data
 
 The seed data has **7 funds, 5 clients and 5 portfolios**. Include deliberate edge cases so the
-screening tool has something to find. The current seed data covers:
+mandate rules have something to find. The current seed data covers:
 
 | Edge case | Where |
 |---|---|
@@ -294,7 +297,7 @@ screening tool has something to find. The current seed data covers:
 Several documents point at these same cases without restating the numbers: documents 2, 9 and 22
 (Fund 2 tobacco), 4 and 23 (Fund 4 concentration), 5 and 14 (the Fund 5 / Client 5 boundary),
 6 and 24 (Fund 6 fee and unrated ESG), 7 and 25 (Fund 7). This is what makes the combined
-questions in section 12 answerable: the document says where to look, the record and screening
+questions in section 12 answerable: the document says where to look, the record and the mandate rules
 supply the exact figure.
 
 ---
@@ -319,16 +322,16 @@ For clients and portfolios, implement full CRUD operations. For funds, portfolio
 | POST | `/funds` | create, validated by Pydantic, returns 201 *(not implemented for funds)* |
 | PUT | `/funds/{id}` | update, 404 if absent *(not implemented for funds)* |
 | DELETE | `/funds/{id}` | delete, 204, 404 if absent *(not implemented for funds)* |
-| POST | `/clients` | create, validated by Pydantic, returns 201 |
+| POST | `/clients` | create, validated by Pydantic, returns 200 with the new record |
 | GET | `/clients` | list, with filters |
 | GET | `/clients/{id}` | one record, 404 if absent |
 | PUT | `/clients/{id}` | update, 404 if absent |
-| DELETE | `/clients/{id}` | delete, 204, 404 if absent |
-| POST | `/portfolios` | create, validated by Pydantic, returns 201 |
+| DELETE | `/clients/{id}` | delete, returns 200 with the deleted record, 404 if absent |
+| POST | `/portfolios` | create, validated by Pydantic, returns 200 with the new record |
 | GET | `/portfolios` | list, with filters |
 | GET | `/portfolios/{id}` | one record, 404 if absent |
 | PUT | `/portfolios/{id}` | update, 404 if absent |
-| DELETE | `/portfolios/{id}` | delete, 204, 404 if absent |
+| DELETE | `/portfolios/{id}` | delete, returns 200 with the deleted record, 404 if absent |
 
 Required filters (at least two):
 
@@ -337,15 +340,16 @@ Required filters (at least two):
 - `GET /clients?excludes_sector=tobacco`
 - `GET /portfolios?fund_id=3` (portfolios holding that fund)
 
-Referential integrity: creating a portfolio with an unknown `fund_id` returns 422 with a clear
-message. Deleting a fund used by a portfolio returns 409.
+Referential integrity: creating or updating a portfolio with an unknown `fund_id` returns 400 with a
+clear message, and so does a total weight above 100. A single weight outside 0 to 100 returns 422
+(Pydantic). Deleting a fund used by a portfolio is not needed while funds are read-only.
 
 ### 5.3 Error handling (one consistent scheme)
 
 | Situation | Status |
 |---|---|
 | Record not found | 404 |
-| Invalid input | 422 (Pydantic) |
+| Invalid input | 422 (Pydantic); 400 for a rule Pydantic cannot check (unknown `fund_id`, total weight above 100) |
 | Conflict (delete in use) | 409 |
 | LLM or embedding provider timeout | 504 |
 | Provider rate limit | 429 |
@@ -395,8 +399,8 @@ change the status, so log them and end the stream with a visible marker.
 
 ### 6.4 Structured analysis
 
-`POST /insights/client-fit` takes a `fund_id` and `client_id`. First run the deterministic
-screening (section 8) so the facts are computed. Then ask Claude to produce a typed assessment,
+`POST /insights/client-fit` takes a `fund_id` and `client_id`. First apply the mandate
+rules (section 8) so the facts are computed. Then ask Claude to produce a typed assessment,
 validated against a Pydantic model:
 
 ```python
@@ -416,7 +420,7 @@ class MandateFitAssessment(BaseModel):
 
 Use tool-based forced structured output (define the schema as a tool and require it) or parse JSON
 then validate with `model_validate`. If validation fails, retry once, then return 502. Consistency
-rule: if `screening` found a breach, the model's `fits` must be false. Enforce this in code after
+rule: if the mandate rules found a breach, the model's `fits` must be false. Enforce this in code after
 validation. Do not trust the model to agree.
 
 ### 6.5 Token accounting
@@ -465,7 +469,9 @@ Each document has these fields:
 Authoring rules the existing documents follow, and any new ones should too:
 
 - Do not state an exact figure that a record owns, unless the document is the source for it (a client
-  agreement may restate its own limits). Point to the record or to screening instead.
+  agreement may restate its own limits). Point to the record or to the mandate rules instead.
+- Start every section heading in `text` with `## ` (for example `## Investment objective`). The
+  markers let a chunker split on headings; they are not formatting.
 - Never present the top-holdings list as the whole fund.
 - Never promise or forecast. Historical commentary carries an explicit "historical-use" caveat.
 
@@ -537,26 +543,21 @@ are stale, and record the choice in the design note.
 
 ---
 
-## 8. Mandate screening (deterministic core)
+## 8. Mandate rules (deterministic core)
 
-Screening reads **only `records.py` data** (`FUNDS`, `CLIENTS`, `PORTFOLIOS`), never the documents.
-The documents explain these rules; the code applies them (documents 11, 16, 17 and 18 describe the
-conventions used below).
+The mandate rules read **only `records.py` data** (`FUNDS`, `CLIENTS`, `PORTFOLIOS`), never the
+documents. The documents explain these rules; the code applies them (documents 11, 16, 17 and 18
+describe the conventions used below). There is no separate screening module. The rules are
+specified here and pinned down by the tests (section 11), which exercise them through the API.
 
-`screening.py` exposes a pure function:
-
-```python
-def screen_fund_against_client(fund, client) -> ScreeningResult
-```
-
-It checks, in code:
+For a fund and a client, the checks are:
 
 | Check | Rule |
 |---|---|
 | Excluded sectors | any holding whose sector is in `excluded_sectors`; report weight |
 | Risk | `fund.risk_rating > client.risk_tolerance` |
 | Concentration | any holding `weight_pct > max_single_holding_pct` |
-| ESG | fund rating worse than `min_esg_rating` (define an ordering A > B > C > D) |
+| ESG | fund rating worse than `min_esg_rating` (ordering A > B > C > D) |
 | Fees | `ongoing_charge_pct > max_ongoing_charge_pct` |
 
 Conventions the documents rely on:
@@ -564,19 +565,19 @@ Conventions the documents rely on:
 - A value exactly equal to a limit is compliant. Only a value above the limit is a breach
   (the Fund 5 / Client 5 boundary case).
 - A rule that is `None` on the client (no ESG minimum, no fee ceiling) is skipped.
-- `unrated` is not in the A > B > C > D ordering. Decide how it compares and test it. The
-  suggested rule is that it fails any minimum, so Fund 6 is flagged for a client with one.
+- `unrated` is not in the A > B > C > D ordering. It fails any ESG minimum, so Fund 6 is flagged
+  for a client with one.
 - Holdings are top positions only, so a clean result means "no breach among reported holdings",
-  not "zero exposure". Say so in the result and in any explanation.
+  not "zero exposure". Say so in any explanation.
 
-Return every breach with `rule`, `holding` (if any), `actual`, `limit` and a boolean overall
-`compliant`. Also implement `screen_portfolio(portfolio)` which looks through positions:
-effective exposure to a sector is the sum of `position_weight * holding_weight / 100`. Cash
-(`cash_weight_pct`) contributes nothing.
+For a portfolio, look through positions: effective exposure to a sector is the sum of
+`position_weight * holding_weight / 100`. Cash (`cash_weight_pct`) contributes nothing. A portfolio
+is not linked to a client, so it is checked against a client chosen at request time.
 
-Expose it as `GET /portfolios/{id}/screen?client_id=...`. The client is a query parameter because
-a portfolio does not store one. Unit test it thoroughly with plain data, no mocks
-needed. This is the highest-value code in the project because compliance depends on it.
+Compliance depends on these rules, so the tests for them are the highest-value tests in the project.
+Until code that applies the rules exists (for the client-fit endpoint and the agent), the tests use a
+helper in `test_clients.py`, so they check the seed data against the rule spec, not product code.
+When the rule code is written, move that helper into it and import it in the tests.
 
 ---
 
@@ -587,10 +588,10 @@ needed. This is the highest-value code in the project because compliance depends
 | Tool | Input | What it does |
 |---|---|---|
 | `search_knowledge_base` | `query` | semantic search, returns top passages with ids and scores |
-| `screen_portfolio` | `client_id`, and `fund_id` or `portfolio_id` | runs the screening from section 8 on real records |
+| `check_mandate` | `client_id`, and `fund_id` or `portfolio_id` | applies the mandate rules from section 8 to real records |
 | optional `get_fund` | `fund_id` | returns a fund's structured facts |
 
-Data sources: `search_knowledge_base` reads the document stream (`docs.py` via Chroma). `screen_portfolio`
+Data sources: `search_knowledge_base` reads the document stream (`docs.py` via Chroma). `check_mandate`
 and `get_fund` read the record stream (`records.py`). The agent needs both for a question like "does
 fund X breach client Y's exclusion, and what does our policy say?", and its system prompt must tell
 it to take exact numbers from the record tools and policy wording from the search tool.
@@ -641,10 +642,10 @@ because hitting the limit is an expected outcome, not a server fault. Always ret
 ### 9.5 System prompt
 
 Rules: you assist portfolio managers and advisers; use tools rather than guessing; cite document
-ids; state screening results exactly as returned by the tool and never override them; do not give
+ids; state mandate-rule results exactly as returned by the tool and never override them; do not give
 personal investment advice or forecasts; say so when the tools return nothing relevant.
 
-Choose the iteration limit deliberately. A typical two-tool question needs search, screen, answer,
+Choose the iteration limit deliberately. A typical two-tool question needs search, check, answer,
 so three to four model calls. A limit of 5 leaves one retry. Be ready to justify it.
 
 ---
@@ -680,7 +681,7 @@ fund). Add an optional "Explain the difference in plain English" button that cal
 `/insights/compare` endpoint, which sends both records to Claude and returns a short comparison in
 client-friendly language.
 
-Also consider a client check panel: pick a fund and client, call the screening endpoint, and show
+Also consider a client check panel: pick a fund and client, call the client-fit endpoint, and show
 a table of breaches in red with the rule, actual and limit.
 
 ### 10.5 UI error handling
@@ -697,15 +698,17 @@ or depend on the network in tests.
 
 | Area | What to prove |
 |---|---|
-| Seed data integrity | each fund's `Percentage_of_fund_represented` equals its holdings sum and is at least 25; every holding sector is in `SECTORS`; every portfolio `fund_id` exists and positions plus cash do not exceed 100; every document's `fund_id` and `client_id` exist in the records; document ids match their dict keys |
-| Screening | each rule triggers and clears correctly; equality with a limit passes; `None` rules are skipped; `unrated` ESG; look-through exposure maths with and without cash |
-| CRUD and filters | create, read, update, delete, 404s, 422s, filter combinations |
+| `test_funds.py` | listing and 404s; every fund's risk, fee and ESG values in range; holding sectors are in `SECTORS`; `Percentage_of_fund_represented` equals the holdings sum and is at least 25; four quarters of `NAV_per_share`; each seed edge case (Fund 2 tobacco 3%, Fund 3 clean, Fund 4 12% holding, Fund 5 on the limits, Fund 6 high fee and unrated, Fund 7 riskiest) |
+| `test_clients.py` | CRUD, 404s, null-means-unchanged updates, sector validation (422); mandate rules on client/fund pairs: each rule breaches and clears, equality with a limit passes, `None` rules are skipped, `unrated` fails an ESG minimum, excluded-sector weights are reported |
+| `test_portfolio.py` | CRUD, 404s, validation (unknown fund, total over 100, weight out of range); seed portfolios point at real funds and total 100 with cash; Portfolio 4's cash; look-through exposure maths (Portfolio 5 tobacco 0.45%), cash ignored, zero exposure |
+| Document integrity | every document's `fund_id` and `client_id` exist in the records; document ids match their dict keys |
+| Filters | the required fund, client and portfolio filters (section 5.2) |
 | Summary | mocked Claude returns text and token counts are passed through |
 | Refusal rule | nothing above the floor gives `refused: true` **and the mocked LLM is called zero times** |
 | Advice refusal | "should I buy" is refused before retrieval |
 | Agent loop | normal completion; tool call then answer; unknown tool reported as error, not raised; missing argument; tool exception; **model that never stops** ends at `AGENT_MAX_ITERATIONS` with `completed: false` |
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 |
-| Structured analysis | invalid model output is rejected; a screening breach forces `fits = false` |
+| Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` |
 
 Mocking approach: replace the client's `create` method and the embedding function with fakes using
 `monkeypatch`. For the iteration limit test, make the fake model return a tool request every time,
@@ -728,7 +731,7 @@ installing requirements, the environment variables table, the exact command to s
   scores).
 - Whether documents are chunked, and why, given their length and shape.
 - The worst wrong answer the system could give and what stops it. A strong candidate: telling a
-  user a fund complies with a client when it does not. Stopped by deterministic screening,
+  user a fund complies with a client when it does not. Stopped by the deterministic mandate rules,
   enforced consistency in code, and citation of sources.
 
 **Demo rehearsal:** one question answered using both tools (for example "does the Meridian
@@ -745,8 +748,8 @@ to Voyage, Chroma and Claude.
 | Stage | Deliverable | Done when |
 |---|---|---|
 | 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass |
-| 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass |
-| 3 | `screening.py` with unit tests | every rule tested |
+| 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files |
+| 3 | Mandate rules tested in `test_clients.py`, `test_funds.py` and `test_portfolio.py` | every rule and seed edge case tested |
 | 4 | Summary, streaming update, structured analysis | endpoints work against real Claude |
 | 5 | Indexing, search, grounded answers, floor tuning, staleness | refusal tested, scores recorded |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit |
@@ -765,7 +768,7 @@ limiting; add a Dockerfile and compose file to run both projects.
 ## 14. Common pitfalls checklist
 
 - Secrets committed to the repository (use environment variables and `.gitignore`).
-- Trusting the model for compliance or arithmetic instead of the screening code.
+- Trusting the model for compliance or arithmetic instead of the mandate rules.
 - Answering an exact-number question from document prose instead of the record (the record wins).
 - Reading a clean result on top holdings as "zero exposure to that sector".
 - Writing `None` metadata values into Chroma (omit the key instead).

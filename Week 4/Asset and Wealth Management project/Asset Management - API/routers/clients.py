@@ -74,7 +74,7 @@ def add_client(new: NewClient):
     # Adds a new client with auto-generated ID
     client_id = max(CLIENTS.keys(), default=0) + 1
     client = {
-        "id": client_id,
+        "client_id": client_id,
         "client_name": new.client_name,
         "risk_tolerance": new.risk_tolerance,
         "excluded_sectors": new.excluded_sectors,
