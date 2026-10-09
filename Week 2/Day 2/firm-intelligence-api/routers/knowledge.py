@@ -6,10 +6,10 @@ import llm
 import knowledge_store as knowledge
 
 # Our relevance floor
-# Below we treat the retrived context as not actually relevant
+# Below we treat the retrieved context as not actually relevant
 RELEVANCE_FLOOR = 0.35
 
-router = APIRouter(prefix="/knowledge", tags=["knowlegde"])
+router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
 # create your class (QUESTION) using base model
@@ -31,7 +31,7 @@ def rebuild_index():
 # Post because it carries json data 
 @router.post("/search")
 def search(q: Question):
-    """Retrival only
+    """Retrieval only
     no model call or generated text etc"""
     try:
         return {"question": q.question,

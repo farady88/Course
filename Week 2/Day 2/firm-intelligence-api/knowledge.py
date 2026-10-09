@@ -1,4 +1,4 @@
-"""Embedding and retieval mechanics.
+"""Embedding and retrieval mechanics.
 Nothing in here will know about"""
 
 import math
@@ -18,9 +18,9 @@ voyage = voyageai.Client(
 INDEX: list[dict] = []
 
 
-def embeded_texts(texts: list[str], input_type: str) -> tuple[list[list[float]]]:
+def embedded_texts(texts: list[str], input_type: str) -> tuple[list[list[float]]]:
     #embed a batch
-        #input_type: tells Voyage wheteher these are docs or a query
+        #input_type: tells Voyage whether these are docs or a query
         result = voyage.embed(texts=texts, model=EMBED_MODEL, input_type=input_type)
 
         # return the vectors and token count(can see cost)
@@ -45,7 +45,7 @@ def build_index() -> int:
         INDEX.clear()
         texts = [doc["body"] for doc in DOCUMENTS]
 
-        vectors, tokens = embeded_texts(texts, input_type = "document")
+        vectors, tokens = embedded_texts(texts, input_type = "document")
         for doc, vector in zip(DOCUMENTS, vectors):
                 INDEX.append({
                         "id": doc["id"],
@@ -63,7 +63,7 @@ def search(question: str, top_k: int = 3) -> list[dict]:
         if not INDEX: 
             raise RuntimeError("Index is empty - call build_index() first")
 
-        query_vectors, _ = embeded_texts([question], input_type="query")
+        query_vectors, _ = embedded_texts([question], input_type="query")
         query_vector = query_vectors[0]
 
         scored = [
