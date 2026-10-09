@@ -8,7 +8,7 @@ import grounding
 
 MODEL = "claude-haiku-4-5-20251001"
 
-# the SDK defaults are max_retries=2 and a 600-second read timout
+# the SDK defaults are max_retries=2 and a 600-second read timeout
 # both are overridden here deliberately... they are our decisions rather than on accident
 
 client = anthropic.Anthropic(
@@ -39,7 +39,7 @@ def build_prompt(firm:dict) -> str:
 
 # The call 
 def summarise_firm(firm: dict) -> dict:
-    # one LLM call... returns the text plus what it coosts to get it.
+    # one LLM call... returns the text plus what it costs to get it.
     response = client.messages.create(
         model=MODEL,
         max_tokens=400,
@@ -56,7 +56,7 @@ def summarise_firm(firm: dict) -> dict:
         "stop_reason": response.stop_reason,
     }
 
-#messages.count_tokens tell you how big a requst is WITHOUT SENDING IT... its a seperate, much cheaper endpoint.
+#messages.count_tokens tell you how big a request is WITHOUT SENDING IT... its a separate, much cheaper endpoint.
 def estimate_input_tokens(firm: dict) -> int:
     """Count tokens BEFORE sending. Costs nothing, tells you what a call
     will cost"""

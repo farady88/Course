@@ -1,6 +1,6 @@
 "Checks on generated answers. Pure functions: no network, no model, no FastAPI"
 
-"""Failure - undegrounded hallucination: sentences that carry no citation at all.
+"""Failure - ungrounded hallucination: sentences that carry no citation at all.
 
 Failure - citation drift: citations that point at the wrong source, or at no source
 
@@ -12,7 +12,7 @@ REFUSAL_SENTENCE = "The provided documents do not answer that question."
 # the findall will return doc-001, rather than [doc-001]
 CITATION = re.compile(r"\[(doc-\d{3})\]")
 
-# normalise - lower-case and sqiash every run of spaces, tabs/newlines into one space
+# normalise - lower-case and squash every run of spaces, tabs/newlines into one space
     # We need this as models sometimes wrap lines... so without normalise a refusal
     # split across two lines would not match
 def normalise(text: str) -> str:
@@ -20,14 +20,14 @@ def normalise(text: str) -> str:
 
 # is_refusal - treats None as a refusal too.
     # we are standardising the refusal 
-    # /knoeledge/ask returns answer: None when it refuses before calling the model,
+    # /knowledge/ask returns answer: None when it refuses before calling the model,
     # and
 def is_refusal (answer: str | None) -> bool:
     return answer is None or normalise(REFUSAL_SENTENCE) in normalise(answer)
 
 
-def split_senteces(text: str) -> list[str]:
-    """Split an answer into snetences, keeping a trailing citiation with its sentence.
+def split_sentences(text: str) -> list[str]:
+    """Split an answer into sentences, keeping a trailing citation with its sentence.
     
     Models can write both 'Revenue rose [doc-101].' and 'Revenue rose. [doc-101]'.
     The second form would otherwise leave '[doc-101]' as a sentence of its own.
@@ -39,13 +39,13 @@ def split_senteces(text: str) -> list[str]:
         if line:
             pieces.extend(p for p in re.split(r"(?<=[.!?])\s+", line) if p)
 
-    seentences: list[str] = []
+    sentences: list[str] = []
     for piece in pieces:
-        if seentences and CITATION.sub("", piece).strip(" .") ==  "":
-            seentences[-1] = f"{seentences[-1]} {piece}"
+        if sentences and CITATION.sub("", piece).strip(" .") ==  "":
+            sentences[-1] = f"{sentences[-1]} {piece}"
         else:
-            seentences.append(piece)
-    return seentences
+            sentences.append(piece)
+    return sentences
 
 # citations_in
 def citations_in(text: str) -> list[str]:
@@ -58,7 +58,7 @@ def check_citations(answer: str | None, source_ids: list[str]) -> dict:
     if is_refusal(answer): 
         return {"refusal" : True, "cited": [], "invalid": [], "uncited_sentences": [], "passed": True}
 
-    sentences = split_senteces(answer)
+    sentences = split_sentences(answer)
     # print(sentences)
     cited = sorted(set(citations_in(answer)))
     invalid = [doc_id for doc_id in cited if doc_id not in source_ids]
@@ -74,4 +74,3 @@ def check_citations(answer: str | None, source_ids: list[str]) -> dict:
         "passed": not invalid and not uncited
     }
 
-# create tests

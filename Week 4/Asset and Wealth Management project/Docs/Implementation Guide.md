@@ -82,7 +82,7 @@ The two streams meet only in the places that need both: `/insights/client-fit` (
 from records, supporting passages from documents) and the agent (one tool per stream).
 
 **Precedence rule.** When a document and a record disagree, the record wins for exact numbers
-(see the *Structured-data precedence* section of document 17). A document is context, never the
+(see the *Structured-data precedence* section of `doc-17`). A document is context, never the
 source for a number that a record already holds. Every prompt that mixes the two must say so.
 
 ### Core design tools
@@ -294,7 +294,7 @@ mandate rules have something to find. The current seed data covers:
 | Look-through tobacco exposure (15% of Fund 2 gives 0.45%) | Portfolio 5 |
 | Portfolio with cash | Portfolio 4 (`cash_weight_pct` 10.0) |
 
-Several documents point at these same cases without restating the numbers: documents 2, 9 and 22
+Several documents point at these same cases without restating the numbers: `doc-02`, `doc-09` and `doc-22`
 (Fund 2 tobacco), 4 and 23 (Fund 4 concentration), 5 and 14 (the Fund 5 / Client 5 boundary),
 6 and 24 (Fund 6 fee and unrated ESG), 7 and 25 (Fund 7). This is what makes the combined
 questions in section 12 answerable: the document says where to look, the record and the mandate rules
@@ -435,32 +435,38 @@ object). Optionally add `POST /tokens/estimate` using the provider's token count
 ### 7.1 Documents
 
 The knowledge base is the `DOCUMENTS` dict in `Data/docs.py`: **25 synthetic documents**, keyed by
-`id`, with `DOCUMENT_LIST` as a convenience list for indexing code. They are qualitative and
-temporal context for the records, not a second copy of them (see *Data flow* in section 2).
+the integer number 1 to 25, with `DOCUMENT_LIST` as a convenience list for indexing code. They are
+qualitative and temporal context for the records, not a second copy of them (see *Data flow* in
+section 2).
+
+Document ids are **zero-padded strings** (`"doc-01"` to `"doc-25"`), not integers. The dictionary key
+stays the plain integer, so `DOCUMENTS[1]["id"] == "doc-01"`. Use the string `id` everywhere outside
+the dict lookup: Chroma ids, search results, citations in answers and `sources`. Never compare it with
+an int, and never rebuild it by hand; read it from the document.
 
 | `doc_type` | Count | ids | What it covers |
 |---|---|---|---|
-| `fund_mandate` | 7 | 1 to 7 | one per fund: objective, philosophy, process, benchmark, data limitations |
-| `commentary` | 2 | 8, 9 | quarterly manager commentary (Fund 1 Q1 2024; Fund 2 Q3 2023, an underperformance) |
-| `client_agreement` | 5 | 10 to 14 | one per client: the mandate restrictions in prose |
-| `policy` | 2 | 15, 17 | ESG and exclusions policy; restriction hierarchy and interpretation standard |
-| `rules` | 1 | 16 | suitability rules and product risk methodology |
-| `methodology` | 1 | 18 | risk and exposure reporting, including the look-through formula |
-| `disclosure` | 1 | 19 | fee and charges disclosure |
-| `glossary` | 1 | 20 | definitions and data limitations |
-| `risk_report` | 5 | 21 to 25 | 2024 risk reviews for Funds 1, 2, 4, 6 and 7 |
+| `fund_mandate` | 7 | `doc-01` to `doc-07` | one per fund: objective, philosophy, process, benchmark, data limitations |
+| `commentary` | 2 | `doc-08`, `doc-09` | quarterly manager commentary (Fund 1 Q1 2024; Fund 2 Q3 2023, an underperformance) |
+| `client_agreement` | 5 | `doc-10` to `doc-14` | one per client: the mandate restrictions in prose |
+| `policy` | 2 | `doc-15`, `doc-17` | ESG and exclusions policy; restriction hierarchy and interpretation standard |
+| `rules` | 1 | `doc-16` | suitability rules and product risk methodology |
+| `methodology` | 1 | `doc-18` | risk and exposure reporting, including the look-through formula |
+| `disclosure` | 1 | `doc-19` | fee and charges disclosure |
+| `glossary` | 1 | `doc-20` | definitions and data limitations |
+| `risk_report` | 5 | `doc-21` to `doc-25` | 2024 risk reviews for Funds 1, 2, 4, 6 and 7 |
 
 Each document has these fields:
 
 | Field | Notes |
 |---|---|
-| `id` | int, the dictionary key, also the id cited in answers |
+| `id` | str, zero-padded (`"doc-01"`); the id stored in Chroma and cited in answers. The dict key is the matching int (`1`) |
 | `title` | str |
 | `doc_type` | one of the types above |
 | `document_date`, `effective_date`, `as_of_date` | `date` objects; they differ only for dated commentary and agreements, so decide which one drives staleness (7.5) |
 | `fund_id` | int or `None`; set on fund-specific documents |
 | `client_id` | int or `None`; set on client agreements |
-| `status` | `active` or `historical` (documents 8 and 9 are historical) |
+| `status` | `active` or `historical` (`doc-08` and `doc-09` are historical) |
 | `version` | str |
 | `authority` | who owns the content, e.g. `fund_management`, `client_mandate`, `firm_policy`, `investment_operations` |
 | `scope` | `fund`, `client` or `firm` |
@@ -477,7 +483,7 @@ Authoring rules the existing documents follow, and any new ones should too:
 
 Coverage is uneven on purpose. Every fund has a mandate document, only Funds 1 and 2 have
 commentary, and Funds 3 and 5 have no risk report. A question about a missing item (for example why
-Fund 7's NAV fell) should be answered as "insufficient evidence" or refused. Documents 24 and 25
+Fund 7's NAV fell) should be answered as "insufficient evidence" or refused. `doc-24` and `doc-25`
 say this explicitly.
 
 ### 7.2 Indexing
@@ -492,7 +498,7 @@ metadata values, so store dates as ISO strings and **leave out** a key whose val
 than writing it. A search result with no `fund_id` key then means "firm-wide or client document".
 
 Chunking decision: documents of one to two pages can be embedded whole, which keeps context
-intact. The longest current document (document 1) is about 310 words, so **none of the 25 reaches the
+intact. The longest current document (`doc-01`) is about 310 words, so **none of the 25 reaches the
 roughly 500-word threshold and all are embedded whole**. If a longer document is added, split it
 into chunks and store the source document id in metadata so citations still point at the whole
 document. Record your decision and reasoning in the design note.
@@ -500,7 +506,7 @@ document. Record your decision and reasoning in the design note.
 ### 7.3 Search only
 
 `POST /knowledge/search` embeds the query (query input type) and returns the top results with
-`id`, `title`, `doc_type`, `score`, `as_of_date`, `status` and a text snippet. **No LLM call.** If the index is empty or not
+`id` (the string id, e.g. `"doc-01"`), `title`, `doc_type`, `score`, `as_of_date`, `status` and a text snippet. **No LLM call.** If the index is empty or not
 built, return 409, not 500.
 
 Convert Chroma distance to a similarity score consistently and document the formula you used.
@@ -513,11 +519,11 @@ Convert Chroma distance to a similarity score consistently and document the form
 2. **Relevance floor:** if no result scores at or above `RELEVANCE_FLOOR`, return a refusal
    **without calling Claude**: `{"answer": null, "refused": true, "reason": "..."}`.
 3. Otherwise send only the passing passages to Claude with a system prompt that says: answer only
-   from the passages, cite document ids in square brackets, say so if the passages are
+   from the passages, cite document ids in square brackets exactly as given (for example `[doc-09]`), say so if the passages are
    insufficient. Include each passage's `as_of_date` and `status`, and tell the model that an exact
    figure about a fund, client or portfolio must come from a record (via the agent's tools), not
    from document prose.
-4. Return `answer`, `sources` (ids and titles used), `refused: false` and token counts.
+4. Return `answer`, `sources` (string ids such as `"doc-09"`, and titles, used), `refused: false` and token counts.
 
 **Tuning the floor:** run 10 to 15 test questions (some clearly answerable, some clearly
 unrelated, some borderline, some asking for personal advice). Record the score of the best result
@@ -534,7 +540,7 @@ Fund commentary goes stale. For each result compute age in days from `as_of_date
 older than `STALE_AFTER_DAYS` with `"stale": true`, and either down-weight their score (for example
 multiply by 0.85) or show the warning. Tell the model the document date in the prompt so it can
 caveat ("as of Q1"). Documents with `status: "historical"` (8 and 9) should carry the warning
-whatever their age. Document 9 (Q3 2023) is the deliberately old test case.
+whatever their age. `doc-09` (Q3 2023) is the deliberately old test case.
 
 Choose the reference date for "age" deliberately. The seed documents are dated 2023 to 2024 and the
 records are a snapshot at 31 December 2024, so measured against today's date nearly every document
@@ -546,7 +552,7 @@ are stale, and record the choice in the design note.
 ## 8. Mandate rules (deterministic core)
 
 The mandate rules read **only `records.py` data** (`FUNDS`, `CLIENTS`, `PORTFOLIOS`), never the
-documents. The documents explain these rules; the code applies them (documents 11, 16, 17 and 18
+documents. The documents explain these rules; the code applies them (`doc-11`, `doc-16`, `doc-17` and `doc-18`
 describe the conventions used below). There is no separate screening module. The rules are
 specified here and pinned down by the tests (section 11), which exercise them through the API.
 
@@ -701,7 +707,7 @@ or depend on the network in tests.
 | `test_funds.py` | listing and 404s; every fund's risk, fee and ESG values in range; holding sectors are in `SECTORS`; `Percentage_of_fund_represented` equals the holdings sum and is at least 25; four quarters of `NAV_per_share`; each seed edge case (Fund 2 tobacco 3%, Fund 3 clean, Fund 4 12% holding, Fund 5 on the limits, Fund 6 high fee and unrated, Fund 7 riskiest) |
 | `test_clients.py` | CRUD, 404s, null-means-unchanged updates, sector validation (422); mandate rules on client/fund pairs: each rule breaches and clears, equality with a limit passes, `None` rules are skipped, `unrated` fails an ESG minimum, excluded-sector weights are reported |
 | `test_portfolio.py` | CRUD, 404s, validation (unknown fund, total over 100, weight out of range); seed portfolios point at real funds and total 100 with cash; Portfolio 4's cash; look-through exposure maths (Portfolio 5 tobacco 0.45%), cash ignored, zero exposure |
-| Document integrity | every document's `fund_id` and `client_id` exist in the records; document ids match their dict keys |
+| Document integrity | every document's `fund_id` and `client_id` exist in the records; each document's string `id` is `doc-` plus its dict key zero-padded to two digits (key 1 gives `"doc-01"`), and ids are unique |
 | Filters | the required fund, client and portfolio filters (section 5.2) |
 | Summary | mocked Claude returns text and token counts are passed through |
 | Refusal rule | nothing above the floor gives `refused: true` **and the mocked LLM is called zero times** |

@@ -24,7 +24,7 @@ DOCUMENTS = {
     # FUND 1
     # -----------------------------------------------------------------------
     1: {
-        "id": 1,
+        "id": "doc-01",
         "title": "Meridian Global Equity Growth - Investment Mandate and Philosophy",
         "doc_type": "fund_mandate",
         "document_date": date(2024, 12, 31),
@@ -89,7 +89,7 @@ portfolio or complete sector allocation."""
     },
 
     2: {
-        "id": 2,
+        "id": "doc-02",
         "title": "Meridian Emerging Markets Equity - Investment Mandate and Risk Profile",
         "doc_type": "fund_mandate",
         "document_date": date(2024, 12, 31),
@@ -150,7 +150,7 @@ total exposure."""
     },
 
     3: {
-        "id": 3,
+        "id": "doc-03",
         "title": "Meridian Sustainable Global Equity - Investment and Sustainability Framework",
         "doc_type": "fund_mandate",
         "document_date": date(2024, 12, 31),
@@ -199,7 +199,7 @@ a global equity comparison benchmark incorporating sustainability constraints.""
     },
 
     4: {
-        "id": 4,
+        "id": "doc-04",
         "title": "Meridian Global Government and Corporate Bond - Fixed Income Framework",
         "doc_type": "fund_mandate",
         "document_date": date(2024, 12, 31),
@@ -252,7 +252,7 @@ complete maturity, duration, credit-quality or issuer breakdown."""
     },
 
     5: {
-        "id": 5,
+        "id": "doc-05",
         "title": "Meridian Balanced Multi-Asset - Strategic Allocation Framework",
         "doc_type": "fund_mandate",
         "document_date": date(2024, 12, 31),
@@ -296,7 +296,7 @@ Benchmark, a strategic multi-asset comparison benchmark."""
     },
 
     6: {
-        "id": 6,
+        "id": "doc-06",
         "title": "Meridian Active Thematic Equity - Thematic Investment Framework",
         "doc_type": "fund_mandate",
         "document_date": date(2024, 12, 31),
@@ -343,7 +343,7 @@ The fund reports against the Meridian Active Thematic Equity Reference Index."""
     },
 
     7: {
-        "id": 7,
+        "id": "doc-07",
         "title": "Meridian Frontier Markets - Frontier Markets Risk Framework",
         "doc_type": "fund_mandate",
         "document_date": date(2024, 12, 31),
@@ -396,7 +396,7 @@ positions."""
     # PERFORMANCE / HISTORICAL COMMENTARY
     # -----------------------------------------------------------------------
     8: {
-        "id": 8,
+        "id": "doc-08",
         "title": "Q1 2024 Manager Commentary - Global Equity Growth",
         "doc_type": "commentary",
         "document_date": date(2024, 3, 31),
@@ -439,7 +439,7 @@ forecast or guarantee of future performance."""
     },
 
     9: {
-        "id": 9,
+        "id": "doc-09",
         "title": "Q3 2023 Manager Commentary - Emerging Markets Underperformance",
         "doc_type": "commentary",
         "document_date": date(2023, 9, 30),
@@ -486,7 +486,7 @@ the same exposures or market conditions still apply at a later date."""
     # CLIENT MANDATES
     # -----------------------------------------------------------------------
     10: {
-        "id": 10,
+        "id": "doc-10",
         "title": "Investment Management Agreement - Harrington Family Trust",
         "doc_type": "client_agreement",
         "document_date": date(2020, 6, 15),
@@ -533,7 +533,7 @@ limits."""
     },
 
     11: {
-        "id": 11,
+        "id": "doc-11",
         "title": "Investment Mandate Summary - Oakridge Pension Scheme",
         "doc_type": "client_agreement",
         "document_date": date(2024, 1, 5),
@@ -570,7 +570,7 @@ with a limit is not a breach; a value above the limit is a breach."""
     },
 
     12: {
-        "id": 12,
+        "id": "doc-12",
         "title": "Investment Mandate Summary - Whitmore Foundation",
         "doc_type": "client_agreement",
         "document_date": date(2024, 1, 8),
@@ -608,7 +608,7 @@ policy where applicable."""
     },
 
     13: {
-        "id": 13,
+        "id": "doc-13",
         "title": "Investment Mandate Summary - Castellan Growth Partners",
         "doc_type": "client_agreement",
         "document_date": date(2024, 1, 10),
@@ -644,7 +644,7 @@ by the mandate rules."""
     },
 
     14: {
-        "id": 14,
+        "id": "doc-14",
         "title": "Investment Mandate Summary - Dr Ingrid Lindqvist",
         "doc_type": "client_agreement",
         "document_date": date(2024, 1, 12),
@@ -682,7 +682,7 @@ a maximum is permitted; only a value above the maximum breaches it."""
     # FIRM POLICIES AND METHODOLOGY
     # -----------------------------------------------------------------------
     15: {
-        "id": 15,
+        "id": "doc-15",
         "title": "Meridian ESG and Exclusions Policy",
         "doc_type": "policy",
         "document_date": date(2023, 1, 10),
@@ -732,7 +732,7 @@ performed by the deterministic mandate rules using structured records."""
     },
 
     16: {
-        "id": 16,
+        "id": "doc-16",
         "title": "Meridian Suitability Rules and Product Risk Methodology",
         "doc_type": "rules",
         "document_date": date(2024, 1, 2),
@@ -790,7 +790,7 @@ outside this synthetic dataset."""
     },
 
     17: {
-        "id": 17,
+        "id": "doc-17",
         "title": "Meridian Investment Restriction Hierarchy and Interpretation Standard",
         "doc_type": "policy",
         "document_date": date(2024, 1, 3),
@@ -844,7 +844,7 @@ exception that is not documented."""
     },
 
     18: {
-        "id": 18,
+        "id": "doc-18",
         "title": "Meridian Fund Risk and Exposure Reporting Methodology",
         "doc_type": "methodology",
         "document_date": date(2024, 1, 4),
@@ -899,7 +899,7 @@ top holdings."""
     },
 
     19: {
-        "id": 19,
+        "id": "doc-19",
         "title": "Meridian Fee and Charges Disclosure Policy",
         "doc_type": "disclosure",
         "document_date": date(2023, 5, 20),
@@ -945,7 +945,7 @@ the current structured fund record is used for deterministic screening."""
     },
 
     20: {
-        "id": 20,
+        "id": "doc-20",
         "title": "Meridian Knowledge Base Definitions and Data Limitations",
         "doc_type": "glossary",
         "document_date": date(2024, 1, 5),
@@ -1010,7 +1010,7 @@ answer, the knowledge system should say that the evidence is insufficient."""
     # FUND-LEVEL RISK / PERFORMANCE REPORTS
     # -----------------------------------------------------------------------
     21: {
-        "id": 21,
+        "id": "doc-21",
         "title": "2024 Fund Risk and Positioning Review - Meridian Global Equity Growth",
         "doc_type": "risk_report",
         "document_date": date(2024, 12, 31),
@@ -1053,7 +1053,7 @@ so the system must not invent one."""
     },
 
     22: {
-        "id": 22,
+        "id": "doc-22",
         "title": "2024 Fund Risk and Positioning Review - Meridian Emerging Markets Equity",
         "doc_type": "risk_report",
         "document_date": date(2024, 12, 31),
@@ -1091,7 +1091,7 @@ a current market forecast."""
     },
 
     23: {
-        "id": 23,
+        "id": "doc-23",
         "title": "2024 Fixed Income Risk Report - Meridian Global Government and Corporate Bond",
         "doc_type": "risk_report",
         "document_date": date(2024, 12, 31),
@@ -1133,7 +1133,7 @@ from the listed top holdings."""
     },
 
     24: {
-        "id": 24,
+        "id": "doc-24",
         "title": "2024 Thematic Risk Review - Meridian Active Thematic Equity",
         "doc_type": "risk_report",
         "document_date": date(2024, 12, 31),
@@ -1171,7 +1171,7 @@ screening rule."""
     },
 
     25: {
-        "id": 25,
+        "id": "doc-25",
         "title": "2024 Frontier Markets Risk Review - Meridian Frontier Markets",
         "doc_type": "risk_report",
         "document_date": date(2024, 12, 31),
