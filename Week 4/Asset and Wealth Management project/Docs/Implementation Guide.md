@@ -178,7 +178,7 @@ All configuration comes from environment variables. No secrets in code. Provide 
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Claude access | (secret) |
 | `VOYAGE_API_KEY` | Embeddings access | (secret) |
-| `CLAUDE_MODEL` | Model used for generation | a current Claude model id |
+| `CLAUDE_MODEL` | Model used for generation | `claude-haiku-4-5-20251001` |
 | `VOYAGE_MODEL` | Embedding model | e.g. `voyage-3` |
 | `CHROMA_PATH` | Persistent store directory | `./chroma_store` |
 | `RELEVANCE_FLOOR` | Minimum similarity to answer | tuned, see section 7 |
@@ -547,6 +547,29 @@ records are a snapshot at 31 December 2024, so measured against today's date nea
 would be stale. Either age documents against the latest `data_as_of_date` or accept that most
 are stale, and record the choice in the design note.
 
+### 7.6 Answer grounding checks (to implement later)
+
+Not built yet. `AI_Layer/grounding.py` holds the cheap structural checks (pure functions: no network,
+no model, no FastAPI). This section lists what is still missing around it.
+
+1. **Prompt side (`llm.py`).** Label each retrieved passage in the context with its `doc-NN` id, tell
+   the model to cite every claim as `[doc-NN]`, give it the exact `REFUSAL_SENTENCE` to use when the
+   passages are insufficient, and pass the same retrieved ids to `check_citations` as `source_ids`.
+2. **Act on a failed check.** `passed: false` must lead somewhere. Pick one and document it: retry
+   once, return the refusal, or return the answer with a flag. Nothing consumes the result today.
+3. **Citation drift.** `check_citations` only proves the cited id was one we supplied, not that the
+   document supports the sentence. Add a second step: an LLM judge call, or a cheap check that the
+   numbers in a sentence appear in the text of the document it cites. Until then, describe the module
+   as a structural check only.
+4. **Citation format variants.** The regex `\[(doc-\d{2})\]` misses `[doc-01, doc-02]` and `[doc-1]`.
+   Those sentences are marked uncited, which fails safe but gives false failures. Either rely on the
+   prompt (item 1) to fix the format, or widen the regex and add a test for each variant.
+5. **Known limit.** Sentence splitting on `. ` breaks on abbreviations ("approx. 5%") and can give a
+   false "uncited" result. Accept it for a cheap check and note it.
+6. **Tests.** Cover the pure functions with no mocks: a refusal passes, an uncited sentence of three
+   or more words fails, a citation to a document not retrieved is `invalid`, and `Revenue rose. [doc-01]`
+   stays one sentence.
+
 ---
 
 ## 8. Mandate rules (deterministic core)
@@ -712,6 +735,7 @@ or depend on the network in tests.
 | Summary | mocked Claude returns text and token counts are passed through |
 | Refusal rule | nothing above the floor gives `refused: true` **and the mocked LLM is called zero times** |
 | Advice refusal | "should I buy" is refused before retrieval |
+| Grounding checks | refusal passes; uncited sentence (3+ words) fails; citation to an unretrieved id is `invalid`; trailing citation stays with its sentence (section 7.6) |
 | Agent loop | normal completion; tool call then answer; unknown tool reported as error, not raised; missing argument; tool exception; **model that never stops** ends at `AGENT_MAX_ITERATIONS` with `completed: false` |
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` |
@@ -783,5 +807,7 @@ limiting; add a Dockerfile and compose file to run both projects.
 - Embedding queries and documents with the same input type.
 - Duplicated documents after re-indexing (always upsert by id).
 - A floor chosen by guessing instead of measured scores.
+- Reading a passed citation check as proof the answer is grounded (it only proves the ids were supplied, section 7.6).
+- Computing a grounding result and never acting on it (a failed check must retry, refuse or flag).
 - Tests that call real services.
 - Streaming endpoints that can only report errors as 200 responses (validate before streaming).
