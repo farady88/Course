@@ -54,7 +54,7 @@ def search(question: str, top_k: int = 3) -> list[dict]:
     )
     ]
 
-#Things  to not from our switch to ChromaDB
+#Things  to note from our switch to ChromaDB
 # embed_texts is imported not rewritten... embedding provider hasn't changed... only the storage has
 # configuration=.... -> not optional, we are choosing something different from Chromas default
 # Chroma return distance, we return similarity

@@ -467,16 +467,15 @@ Each document has these fields:
 | `fund_id` | int or `None`; set on fund-specific documents |
 | `client_id` | int or `None`; set on client agreements |
 | `status` | `active` or `historical` (`doc-08` and `doc-09` are historical) |
-| `version` | str |
 | `authority` | who owns the content, e.g. `fund_management`, `client_mandate`, `firm_policy`, `investment_operations` |
 | `scope` | `fund`, `client` or `firm` |
-| `text` | the document body |
+| `body` | the document body, a triple-quoted string wrapped in parentheses: `"body": ("""...""")` |
 
 Authoring rules the existing documents follow, and any new ones should too:
 
 - Do not state an exact figure that a record owns, unless the document is the source for it (a client
   agreement may restate its own limits). Point to the record or to the mandate rules instead.
-- Start every section heading in `text` with `## ` (for example `## Investment objective`). The
+- Start every section heading in `body` with `## ` (for example `## Investment objective`). The
   markers let a chunker split on headings; they are not formatting.
 - Never present the top-holdings list as the whole fund.
 - Never promise or forecast. Historical commentary carries an explicit "historical-use" caveat.
@@ -488,12 +487,12 @@ say this explicitly.
 
 ### 7.2 Indexing
 
-`POST /knowledge/index` reads every document in `DOCUMENTS`, embeds its `text` with Voyage (document
+`POST /knowledge/index` reads every document in `DOCUMENTS`, embeds its `body` with Voyage (document
 input type), and **upserts by document id** into a persistent Chroma collection, so re-running never
 duplicates. Return the number indexed.
 
 Store these as Chroma metadata: `doc_type`, `document_date`, `as_of_date`, `fund_id`, `client_id`,
-`status`, `authority`, `scope` and `version`. Chroma accepts only strings, numbers and booleans as
+`status`, `authority` and `scope`. Chroma accepts only strings, numbers and booleans as
 metadata values, so store dates as ISO strings and **leave out** a key whose value is `None` rather
 than writing it. A search result with no `fund_id` key then means "firm-wide or client document".
 

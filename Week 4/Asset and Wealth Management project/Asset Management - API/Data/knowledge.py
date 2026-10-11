@@ -49,6 +49,15 @@ def build_index() -> int:
                 INDEX.append({
                         "id": doc["id"],
                         "title": doc["title"],
+                        "type": doc["doc_type"],
+                        "document_date": doc["document_date"],
+                        "effective_date": doc["effective_date"],
+                        "as_of_date": doc["as_of_date"],
+                        "fund_id": doc["fund_id"],
+                        "client_id": doc["client_id"],
+                        "status": doc["status"],
+                        "authority": doc["authority"],
+                        "scope": doc["scope"],
                         "text": doc["body"],
                         "vector": vector
                 })
@@ -69,7 +78,16 @@ def search(question: str, top_k: int = 3) -> list[dict]:
             {
             "id": entry["id"],
             "title": entry["title"],
-            "text": entry["text"],
+            "type": entry["entry_type"],
+            "document_date": entry["document_date"],
+            "effective_date": entry["effective_date"],
+            "as_of_date": entry["as_of_date"],
+            "fund_id": entry["fund_id"],
+            "client_id": entry["client_id"],
+            "status": entry["status"],
+            "authority": entry["authority"],
+            "scope": entry["scope"],
+            "text": entry["body"],
             "score": cosine_similarity(query_vector, entry["vector"])
             }
             for entry in INDEX
