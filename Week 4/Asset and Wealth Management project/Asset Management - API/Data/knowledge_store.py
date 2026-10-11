@@ -1,11 +1,12 @@
 import chromadb
-from docs import DOCUMENTS
-from knowledge import embedded_texts
+from Data.docs import DOCUMENTS
+from Data.knowledge import embedded_texts
 
 chroma = chromadb.PersistentClient(path="./chroma_store")
 
 collection = chroma.get_or_create_collection(
-
+    name = "Asset_Management_docs",
+    configuration = {"hnsw":{"space": "cosine"}},
 )
 
 def count() -> int:

@@ -3,7 +3,7 @@
 import math
 import os 
 import voyageai
-from docs import DOCUMENTS
+from Data.docs import DOCUMENTS
 
 EMBED_MODEL = "voyage-3-lite"
 
