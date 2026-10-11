@@ -1,21 +1,5 @@
-"""Synthetic investment documents for the vector knowledge base.
+"Synthetic investment documents for the vector knowledge base."
 
-Design principles
------------------
-1.Structured records in records.py are authoritative for exact numerical facts:
-   current fund charges, risk ratings, ESG ratings, holdings, weights, clients and
-   portfolio positions.
-2.These documents provide qualitative context: investment philosophy, process,
-   risk methodology, benchmark definitions, performance attribution, mandates,
-   policies and historical commentary.
-3.Every document carries explicit temporal and authority metadata so retrieval can
-   distinguish current snapshots from historical material.
-4.Documents do not claim that a partial top-holdings list represents the whole fund.
-5.Compliance decisions must remain deterministic in the mandate rules; these documents
-   explain the rules but never replace the mandate rules.
-
-All figures and entities are synthetic.
-"""
 
 from datetime import date
 
