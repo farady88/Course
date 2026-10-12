@@ -7,7 +7,7 @@ embedding model that built it. If either changes, the collection
 is rebuilt from scratch.
 """
 
-import hashlib, chromadb, chunking, knowledge
+import hashlib, chromadb, chunking, knowledge, time
 from documents import DOCUMENTS
 from corpus import CORPUS_DOCUMENTS
 
@@ -26,13 +26,15 @@ def collection_for(strategy: str):
 
 def embed_batched(texts: list[str], input_type: str) -> tuple[list[list[float]], int]:
     "Embed any number of texts in batches. Return all vectors and the total token count"
-    vectors = list[list[float]] = []
+    vectors : list[list[float]] = []
     tokens = 0
 
     for start in range(0, len(texts), BATCH_SIZE):
         batch_vectors, batch_tokens = knowledge.embedded_texts(texts[start:start + BATCH_SIZE], input_type=input_type)
         vectors.extend(batch_vectors)
         tokens += batch_tokens
+    # Free Voyage accounts are limited to roughly 3 requests per minute.
+        time.sleep(22)
     return vectors, tokens
 
 # The fingerprint changes if the text, the model or the order changes. 
@@ -66,7 +68,7 @@ def build(strategy: str, force: bool = False) -> dict:
         documents = [c["text"] for c in chunks],
         metadatas = [{"doc_id": c["doc_id"], "title": c["title"], "fingerprint": fp} for c in chunks],
     ) 
-    return
+    return {"strategy": strategy, "chunks": len(chunks), "embedding_tokens": tokens, "rebuilt": True}
 
 # NEW FUNCTIONS ADD - search_with_vectors
 # the read side

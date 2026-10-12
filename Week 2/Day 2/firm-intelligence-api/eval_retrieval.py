@@ -47,3 +47,37 @@ def score_strategy(questions: list[dict], ranked: list[list[dict]]) -> dict:
         "recall@3_by_kind": {kind: round(statistics.mean(v), 2) for kind, v in sorted (kinds.items())},
         "missed@3": [q["id"] for (q, _), r in zip(answerable, ranks) if not r or r > 3],
     }
+
+def main() -> None:
+    print("Building indexes (free if nothing has changed)...")
+    for strategy in chunking.STRATEGIES:
+        b = chunk_index.build(strategy)
+        print(f"  {strategy:<22} {b['chunks']:>3} chunks  "
+              f"{'rebuilt' if b['rebuilt'] else 'up to date':<10}  {b['embedding_tokens']:>6} tokens")
+
+    vectors, tokens = chunk_index.embed_batched([q["question"] for q in EVAL_SET], input_type="query")
+    print(f"\nEmbedded {len(EVAL_SET)} questions once ({tokens} tokens), reused for every strategy.\n")
+
+    results = {}
+    for strategy in chunking.STRATEGIES:
+        ranked = chunk_index.search_with_vectors(strategy, vectors, k=max(K_VALUES))
+        results[strategy] = score_strategy(EVAL_SET, ranked)
+
+    header = f"{'strategy':<22}{'R@1':>6}{'R@3':>6}{'R@5':>6}{'MRR':>7}{'ctx words':>11}{'top ans':>9}{'top unans':>11}"
+    print(header)
+    print("-" * len(header))
+    for strategy, r in results.items():
+        print(f"{strategy:<22}{r['recall@1']:>6.2f}{r['recall@3']:>6.2f}{r['recall@5']:>6.2f}"
+              f"{r['mrr']:>7.2f}{r['context_words@3']:>11}{r['top_score_answerable']:>9.2f}"
+              f"{r['top_score_unanswerable']:>11.2f}")
+    print("\nMissed at k=3:")
+    for strategy, r in results.items():
+        print(f"  {strategy:<22} {', '.join(r['missed@3']) or 'none'}")
+
+    Path("eval_results").mkdir(exist_ok=True)
+    Path("eval_results/retrieval.json").write_text(json.dumps(results, indent=2))
+    print("\nSaved eval_results/retrieval.json")
+
+
+if __name__ == "__main__":
+    main()
