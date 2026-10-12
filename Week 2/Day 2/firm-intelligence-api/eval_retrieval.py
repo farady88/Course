@@ -26,8 +26,8 @@ def first_hit_rank(hits: list[dict], evidence: str) -> int | None:
 # Then turn those ranks into scores
 def score_strategy(questions: list[dict], ranked: list[list[dict]]) -> dict:
     "Recall@k, MRR, context size and the questions that's missed for one strategy."
-    answerable = [(q,hits) for q, hits in zip (questions, ranked) if q["id"]]
-    unanswerable = [(q,hits) for q, hits in zip(questions, ranked) if not q["id"]]
+    answerable = [(q,hits) for q, hits in zip (questions, ranked) if q["doc_id"]]
+    unanswerable = [(q,hits) for q, hits in zip(questions, ranked) if not q["doc_id"]]
     ranks = [first_hit_rank(hits, q["evidence"]) for q, hits in answerable]
 
     # Group by question kind
