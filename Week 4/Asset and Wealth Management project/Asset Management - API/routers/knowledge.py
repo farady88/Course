@@ -6,7 +6,7 @@ from anthropic import APIStatusError, APITimeoutError, RateLimitError
 import Data.knowledge_store as knowledge
 
 
-RELEVANCE_FLOOR = 0.25
+RELEVANCE_FLOOR = 0.45
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 

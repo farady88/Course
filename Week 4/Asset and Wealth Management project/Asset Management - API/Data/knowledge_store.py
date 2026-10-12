@@ -39,8 +39,8 @@ def search(question: str, top_k: int = 3) -> list[dict]:
 
     return[{
         "id": doc_id,
-        "title": metadata["title"],
-        "text": text,
+        **metadata,
+        "text": " ".join(text.split()),  # collapse newlines/runs of whitespace for readability
         #Chroma will give us back distance... lower is closer...
         # we will do 
         "score": 1 - distance
