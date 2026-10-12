@@ -31,7 +31,7 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
         """How close are tow vectors in direction, ignoring their length
         1.0 means identical direction
         0.0 means unrelated
-        -1.0 means inversly related"""
+        -1.0 means inversely related"""
 
         dot = sum(x * y for x, y in zip (a, b))
         norm_a = math.sqrt(sum(x * x for x in a))
