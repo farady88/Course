@@ -15,17 +15,18 @@ def count() -> int:
 def build_index() -> int:
     "Embed every document and hand the vectors to Chroma."
 
-    texts = [doc["body"]for doc in DOCUMENTS]
+    texts = [doc["body"] for doc in DOCUMENTS.values()]
     vectors, tokens, = embedded_texts(texts, input_type="document")
 
     collection.upsert(
-        ids=[doc["id"] for doc in DOCUMENTS],
+        ids=[doc["id"] for doc in DOCUMENTS.values()],
         embeddings=vectors,
         documents=texts,
-        metadatas=[{"title": doc["title"], "type": doc["doc_type"], "document_date": doc["document_date"],
-                    "effective_date": doc["effective_date"], "as_of_date": doc["as_of_date"],
+        # isoformat for datetime metadata so ChromaDB's metadata validation still holds
+        metadatas=[{"title": doc["title"], "type": doc["doc_type"], "document_date": doc["document_date"].isoformat(),
+                    "effective_date": doc["effective_date"].isoformat(), "as_of_date": doc["as_of_date"].isoformat(),
                     "fund_id": doc["fund_id"], "client_id": doc["client_id"], "status": doc["status"],
-                    "authority": doc["authority"], "scope": doc["scope"]} for doc in DOCUMENTS],
+                    "authority": doc["authority"], "scope": doc["scope"]} for doc in DOCUMENTS.values()],
     )
     return tokens
 
@@ -40,7 +41,7 @@ def search(question: str, top_k: int = 3) -> list[dict]:
         "id": doc_id,
         "title": metadata["title"],
         "text": text,
-        #Chroma will giv us back distance... lower is closer...
+        #Chroma will give us back distance... lower is closer...
         # we will do 
         "score": 1 - distance
     }

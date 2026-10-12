@@ -17,7 +17,7 @@ class Question (BaseModel):
 
 @router.post("/index")
 def rebuild_index():
-    """Embed the corpus. Costs tokens... so it is a deliberate POST 
+    """Embed the corpus. Costs tokens so it is a deliberate POST 
     """
     tokens = knowledge.build_index()
     return {"indexed": knowledge.count(), "embedding_tokens": tokens}
