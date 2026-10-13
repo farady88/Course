@@ -1,5 +1,5 @@
 {
-  "floor": 0.35,
+  "floor": 0.53,
   "sections_contextual": {
     "answer_accuracy": 0.966,
     "refusal_accuracy": 1,
@@ -8,32 +8,49 @@
     ],
     "wrong_or_unrefused": [],
     "model_calls": 30,
-    "avg_input_tokens": 422
+    "avg_input_tokens": 348
   },
   "fixed_overlap_25": {
-    "answer_accuracy": 0.793,
+    "answer_accuracy": 0.552,
     "refusal_accuracy": 1,
     "false_refusals": [
       "q02",
+      "q07",
+      "q08",
+      "q09",
+      "q12",
+      "q13",
+      "q14",
+      "q15",
       "q17",
       "q18",
+      "q22",
       "q24",
       "q28"
     ],
-    "wrong_or_unrefused": [
-      "q09"
-    ],
-    "model_calls": 30,
-    "avg_input_tokens": 463
+    "wrong_or_unrefused": [],
+    "model_calls": 27,
+    "avg_input_tokens": 335
   },
   "whole_document": {
-    "answer_accuracy": 0.966,
+    "answer_accuracy": 0.586,
     "refusal_accuracy": 1,
     "false_refusals": [
-      "q24"
+      "q04",
+      "q05",
+      "q06",
+      "q10",
+      "q12",
+      "q14",
+      "q15",
+      "q18",
+      "q19",
+      "q24",
+      "q28",
+      "q29"
     ],
     "wrong_or_unrefused": [],
-    "model_calls": 30,
-    "avg_input_tokens": 925
+    "model_calls": 22,
+    "avg_input_tokens": 666
   }
 }

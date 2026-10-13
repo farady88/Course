@@ -1,63 +1,26 @@
 # embed_texts... is imported, not rewritten
 # the embedding provider has not changes... only where the vectors get stored
 
-import chromadb
-from documents import DOCUMENTS
-from knowledge import embedded_texts
+import knowledge, chunk_index 
 
-chroma = chromadb.PersistentClient(path="./chroma_store")
-
-collection = chroma.get_or_create_collection(
-    name="firm_documents",
-    # HNSW (hierarchical Navigable Small World) is a graph based index used in vector databased
-    #  to perform fast and appropriate nearest neighbour search in high dimensional data
-    configuration={"hnsw": {"space": "cosine"}},
-)
+# our chosen strategy
+CHUNK_STRATEGY = "sections_contextual"
 
 def count() -> int:
-    return collection.count
+    return chunk_index.collection_for(CHUNK_STRATEGY).count()
+
 
 def build_index() -> int:
-    "Embed every document and hand the vectors to Chroma."
+    "Chunk and embed the corpus. Free if nothing has changed."
 
-    texts = [doc["body"]for doc in DOCUMENTS]
-    vectors, tokens, = embedded_texts(texts, input_type="document")
+    return chunk_index.build(CHUNK_STRATEGY)["embedding_tokens"]
 
-    collection.upsert(
-        ids=[doc["id"] for doc in DOCUMENTS],
-        embeddings=vectors,
-        documents=texts,
-        metadatas=[{"title": doc["title"], "type": doc["type"]} for doc in DOCUMENTS],
-    )
-    return tokens
 
 # Chroma will give us back distance... lower is closer...
 def search(question: str, top_k: int = 3) -> list[dict]:
     "Embed the question and let Chroma do the storing."
-    query_vectors, _ = embedded_texts([question], input_type="query")
+    if count() == 0:
+        raise RuntimeError("Index is empty, call POST /knowledge/ask/index first")
+    query_vectors, _ = knowledge.embedded_texts([question], input_type="query")
 
-    result = collection.query(query_embeddings=query_vectors, n_results=top_k)
-
-    return[{
-        "id": doc_id,
-        "title": metadata["title"],
-        "text": text,
-        #Chroma will giv us back distance... lower is closer...
-        # we will do 
-        "score": 1 - distance
-    }
-    for doc_id, text, metadata, distance in zip(
-        result["ids"][0],
-        result["documents"][0],
-        result["metadatas"][0],
-        result["distances"][0],
-    )
-    ]
-
-#Things  to not from our switch to ChromaDB
-# embed_texts is imported not rewritten... embedding provider hasn't changed... only the storage has
-# configuration=.... -> not optional, we are choosing something different from Chromas default
-# Chroma return distance, we return similarity
-    # in Chroma, lower is better
-    # higher was better for ours.... (1 - distance) converts
-# upsert instead of add -> add fails on an id that already exists, upsert overwrites
+    return chunk_index.search_with_vectors(CHUNK_STRATEGY, query_vectors, k=top_k)[0]
