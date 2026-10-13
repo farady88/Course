@@ -59,7 +59,7 @@ def whole_document(doc: dict) -> list[dict]:
 def fixed_words(doc: dict, size: int = 100, overlap: int = 0) -> list[dict]:
     """Every 'size' words, regardless of sentences or section. Cheap and blind"""
     if not 0 <= overlap < size:
-        raise ValueError("ovcerlap must be at least 0 and smaller than size")
+        raise ValueError("overlap must be at least 0 and smaller than size")
     words = doc["body"].split()
     step = size - overlap
     chunks = []
