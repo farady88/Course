@@ -8,7 +8,7 @@ Each answerable question records:
   keywords  what a correct answer must mention. Every item must appear in the answer.
             "a|b" means either a or b is acceptable. Matching is case-insensitive and
             whole-word, so "no" does not match inside "not". A trailing * allows any
-            ending, so "exclud*" matches "excluded" and "excludes". A refusal never
+            ending, so "exclude*" matches "excluded" and "excludes". A refusal never
             counts as correct, whatever words it happens to contain.
   kind      what the question tests
 
