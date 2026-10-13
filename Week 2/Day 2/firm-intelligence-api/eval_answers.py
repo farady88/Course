@@ -47,3 +47,29 @@ def run(strategy: str, vectors: list[list[float]], floor: float) -> dict:
         "model_calls": len(tokens),
         "avg_input_tokens": round(statistics.mean(tokens)) if tokens else 0,
     }
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("strategies", nargs="+")
+    parser.add_argument("--floor", type=float, default=0.35)
+    args = parser.parse_args()
+
+    for strategy in args.strategies:
+        chunk_index.build(strategy)
+    vectors, _ = chunk_index.embed_batched([q["question"] for q in EVAL_SET], input_type="query")
+
+    results = {s: run(s, vectors, args.floor) for s in args.strategies}
+    print(f"floor = {args.floor}\n")
+    print(f"{'strategy':<22}{'answers':>9}{'refusals':>10}{'calls':>7}{'avg in tokens':>15}")
+    for s, r in results.items():
+        print(f"{s:<22}{r['answer_accuracy']:>9.2f}{r['refusal_accuracy']:>10.2f}"
+              f"{r['model_calls']:>7}{r['avg_input_tokens']:>15}")
+        print(f"    false refusals: {', '.join(r['false_refusals']) or 'none'}")
+        print(f"    wrong or not refused: {', '.join(r['wrong_or_unrefused']) or 'none'}")
+
+    Path("eval_results").mkdir(exist_ok=True)
+    Path("eval_results/answers.json").write_text(json.dumps({"floor": args.floor, **results}, indent=2))
+
+
+if __name__ == "__main__":
+    main()
