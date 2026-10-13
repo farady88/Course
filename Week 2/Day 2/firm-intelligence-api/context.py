@@ -1,5 +1,5 @@
 """
-How retrived hits become the text the model reads
+How retrieved hits become the text the model reads
 Failure: lost in the middle
 """
 

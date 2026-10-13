@@ -25,7 +25,7 @@ def run(strategy: str, vectors: list[list[float]], floor: float) -> dict:
         if usable:
             result = llm.answer_from_context(q["question"], context.build_context(usable))
             answer = result["answer"]
-            tokens.append(result["input_token"])
+            tokens.append(result["input_tokens"])
         else:
             answer = None
         
@@ -43,7 +43,7 @@ def run(strategy: str, vectors: list[list[float]], floor: float) -> dict:
         "answer_accuracy": round(statistics.mean(answerable), 3),
         "refusal_accuracy": round(statistics.mean(unanswerable), 3),
         "false_refusals": false_refusals,
-        "wrong_or_unroused": wrong,
+        "wrong_or_unrefused": wrong,
         "model_calls": len(tokens),
         "avg_input_tokens": round(statistics.mean(tokens)) if tokens else 0,
     }

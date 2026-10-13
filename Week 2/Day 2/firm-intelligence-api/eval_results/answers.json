@@ -1,0 +1,39 @@
+{
+  "floor": 0.35,
+  "sections_contextual": {
+    "answer_accuracy": 0.966,
+    "refusal_accuracy": 1,
+    "false_refusals": [
+      "q24"
+    ],
+    "wrong_or_unrefused": [],
+    "model_calls": 30,
+    "avg_input_tokens": 422
+  },
+  "fixed_overlap_25": {
+    "answer_accuracy": 0.793,
+    "refusal_accuracy": 1,
+    "false_refusals": [
+      "q02",
+      "q17",
+      "q18",
+      "q24",
+      "q28"
+    ],
+    "wrong_or_unrefused": [
+      "q09"
+    ],
+    "model_calls": 30,
+    "avg_input_tokens": 463
+  },
+  "whole_document": {
+    "answer_accuracy": 0.966,
+    "refusal_accuracy": 1,
+    "false_refusals": [
+      "q24"
+    ],
+    "wrong_or_unrefused": [],
+    "model_calls": 30,
+    "avg_input_tokens": 925
+  }
+}
