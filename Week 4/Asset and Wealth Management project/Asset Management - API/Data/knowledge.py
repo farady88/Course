@@ -1,14 +1,14 @@
 "Embedding and retrieval mechanics"
 
 import math
-import os 
 import voyageai
+import config
 from Data.docs import DOCUMENTS
 
-EMBED_MODEL = "voyage-3-lite"
+EMBED_MODEL = config.VOYAGE_MODEL
 
 voyage = voyageai.Client(
-    api_key=os.environ["VOYAGE_API_KEY"],
+    api_key=config.require("VOYAGE_API_KEY"),
     max_retries=3,
     timeout=3
 )

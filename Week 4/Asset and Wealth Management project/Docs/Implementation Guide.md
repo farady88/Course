@@ -6,6 +6,31 @@ endpoint, the AI features, the agent, the user interface, testing and the order 
 
 ---
 
+## Implementation status
+
+The guide is the full specification. This table says what the repository actually contains today.
+Anything marked *Not built* is specification only. Each section below repeats its own status.
+
+| Area | Status | What exists |
+|---|---|---|
+| Seed records (`Data/records.py`) | Built | 7 funds, 5 clients, 5 portfolios, 15 sectors, all edge cases in 4.4 |
+| Documents (`Data/docs.py`) | Built | 25 documents, ids `doc-01` to `doc-25`, `DOCUMENT_LIST` |
+| `/health` | Built (minimal) | returns `{"status": "Ok"}`, no index information |
+| Funds (read-only), Clients, Portfolios | Built (partial) | list, get, create, update, delete as in 5.2. **No query filters** |
+| Error scheme (5.3) | Partial | 404, 400, 422 only. No shared handler, no 429/502/504/500 mapping |
+| Configuration (section 3) | Built | `config.py` reads environment variables; no `.env.example` (see section 3) |
+| LLM features (section 6) | Not built | `AI_Layer/llm.py` holds only the Anthropic client, `MODEL` and `SYSTEM_PROMPT` |
+| `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
+| `POST /knowledge/ask`, refusal, staleness (7.4, 7.5) | Not built | `RELEVANCE_FLOOR = 0.45` is defined in the router but unused; floor not tuned |
+| Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` pure functions only; not wired in, no tests |
+| Mandate rules (section 8) | Tests only | no product code; the rules live in test helpers |
+| Agent (section 9) | Not built | |
+| Streamlit UI (section 10) | Not built | `Asset Management - UI/` is an empty folder |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`; `test_llm.py` is empty; no mocks yet |
+| READMEs, design note, demo (section 12) | Not built | |
+
+---
+
 ## 1. The problem and the users
 
 **Overview:** Investment professionals need to quickly understand whether an investment is suitable for a client and be able to explain why clearly and in quick succession.
@@ -28,11 +53,14 @@ arithmetic or decides compliance by itself.
 
 ## 2. Architecture
 
-Two separate projects, each with its own virtual environment and `requirements.txt`.
+Two separate projects, intended to have their own virtual environment and `requirements.txt`.
+Today only the API exists: `Asset Management - UI/` is empty, and a single `requirements.txt` at the
+repository root covers the API (FastAPI, uvicorn, httpx, pydantic, pytest, mypy, ruff, chromadb,
+voyageai, anthropic). It has no Streamlit.
 
 ```
 Asset Management - API/    FastAPI backend: records, LLM features, vector search, agent
-Asset Management - UI/     Streamlit front end: talks to the API over HTTP only
+Asset Management - UI/     Streamlit front end: talks to the API over HTTP only (not built)
 ```
 
 External services (all real, nothing mocked in the running system):
@@ -123,7 +151,7 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **Deterministic mandate rules**
 - *What:* Ordinary code that checks exact rules on exact numbers.
-- *Here:* The rules in section 8 cover excluded sectors, risk, concentration, ESG and fees. They are pinned down by the tests in `test_clients.py`, `test_funds.py` and `test_portfolio.py`. Their result is the source of truth for compliance, and the model may only explain it.
+- *Here:* The rules in section 8 cover excluded sectors, risk, concentration, ESG and fees. They are pinned down by the tests in `test_clients.py` and `test_portfolio.py` (`test_funds.py` checks record integrity only). Their result is the source of truth for compliance, and the model may only explain it.
 
 **FastAPI and Pydantic**
 - *What:* FastAPI is a Python web framework. Pydantic validates data against typed models.
@@ -135,35 +163,40 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **pytest with mocking**
 - *What:* pytest runs the tests. Mocking swaps real services for fakes.
-- *Here:* Fake Claude and Voyage responses (via `monkeypatch`) keep tests free, fast and repeatable, and let us simulate a model that never stops.
+- *Here:* Fake Claude and Voyage responses (via `monkeypatch`) keep tests free, fast and repeatable, and let us simulate a model that never stops. (Planned: no test uses a mock yet.)
 
-### Suggested API layout
+### API layout
+
+What exists today:
 
 ```
 Asset Management - API/
   main.py                 app creation, router registration, /health
   config.py               environment variables and thresholds
-  models.py               Pydantic models (records, requests, analysis schema)
   Data/
     records.py            in-memory record store and seed data (SECTORS, FUNDS, CLIENTS, PORTFOLIOS)
     docs.py               the 25 source documents (DOCUMENTS dict and DOCUMENT_LIST for the knowledge base)
-  llm.py                  Claude client, summary, streaming, structured analysis
-  knowledge_store.py      Chroma + Voyage: index, search
-  agent.py                tool-use loop and tools
+    knowledge.py          Voyage client and `embedded_texts`, plus an older in-memory index (build_index,
+                          search, cosine_similarity) that the API does not use
+    knowledge_store.py    Chroma + Voyage: build_index, search, count
+  AI_Layer/
+    llm.py                Anthropic client, MODEL, SYSTEM_PROMPT only
+    grounding.py          pure citation checks (7.6)
   routers/
-    funds.py  clients.py  portfolio.py  insights.py  knowledge.py  agent.py
+    funds.py  clients.py  portfolio.py  knowledge.py
   tests/
-    test_funds.py         fund CRUD reads, record integrity, seed edge cases
-    test_clients.py       client CRUD and validation, mandate rules on client/fund pairs
-    test_portfolio.py     portfolio CRUD and validation, seed portfolios, look-through exposure
+    test_funds.py         fund reads and 404, record integrity, bond fields
+    test_clients.py       client CRUD and validation, mandate rules on client/fund pairs (test helper)
+    test_portfolio.py     portfolio CRUD and validation, seed portfolios, look-through exposure (test helper)
+    test_llm.py           empty
     conftest.py           restores CLIENTS and PORTFOLIOS after every test
-  requirements.txt
-  README.md
-Asset Management - UI/
-  app.py                  Streamlit app
-  requirements.txt
-  README.md
+requirements.txt          at the repository root, not inside the API folder
+Asset Management - UI/    empty
 ```
+
+Still to create: `models.py`, `agent.py`, `routers/insights.py`, `routers/agent.py`,
+the UI's `app.py` and both READMEs. Request and response models currently live
+inside each router file.
 
 Keep business logic (`agent.py`, `llm.py`) free of FastAPI imports so it can be
 tested directly. Routers only translate HTTP to function calls and errors to status codes.
@@ -172,7 +205,7 @@ tested directly. Routers only translate HTTP to function calls and errors to sta
 
 ## 3. Configuration
 
-All configuration comes from environment variables. No secrets in code. Provide a `.env.example`.
+All configuration comes from environment variables. No secrets in code. This project skips `.env.example`: the keys are typed into each terminal.
 
 | Variable | Purpose | Example |
 |---|---|---|
@@ -186,6 +219,15 @@ All configuration comes from environment variables. No secrets in code. Provide 
 | `STALE_AFTER_DAYS` | Document age flagged as stale | 120 |
 
 Load them in one `config.py` and fail fast with a clear message if a required key is missing.
+
+**Status: built** as `Asset Management - API/config.py`. It reads every variable above from the
+environment, with the defaults shown (`voyage-3-lite`, `./chroma_store`, floor 0.45, 5 iterations, 120
+days), and `require(name)` raises a clear `RuntimeError` for a missing key. No secret is stored in
+code. `AI_Layer/llm.py` requires `ANTHROPIC_API_KEY` and `Data/knowledge.py` requires `VOYAGE_API_KEY`,
+each at import, so starting the server needs `VOYAGE_API_KEY` set in that terminal. The tests do not:
+`conftest.py` sets placeholder keys. `RELEVANCE_FLOOR`, `AGENT_MAX_ITERATIONS` and `STALE_AFTER_DAYS` are defined but nothing
+uses the last two yet. The client timeouts (Anthropic 50 s, Voyage 3 s) and retry counts are still
+hard-coded in their modules. There is no `.env.example` (you set keys by hand per terminal).
 
 ---
 
@@ -276,7 +318,9 @@ A portfolio is not linked to a client. It holds positions only, so a portfolio i
 a client chosen at request time (see section 8). Position weights plus `cash_weight_pct` must not
 exceed 100, and every `fund_id` must exist. In the seed data each portfolio totals exactly 100.
 Portfolio 4 states its 10% cash explicitly, and cash is ignored by look-through exposure because
-it holds no sector exposure.
+it holds no sector exposure. The portfolio API models (`NewPortfolio`, `UpdatePortfolio`) accept
+`positions` only, so `cash_weight_pct` exists in the seed data but cannot be set through the API, and
+the total-weight check in 5.2 does not include it.
 
 ### 4.4 Seed data
 
@@ -308,6 +352,8 @@ supply the exact figure.
 
 `GET /health` returns `{"status": "ok"}`. Optionally report whether the Chroma index is built and
 how many documents it holds.
+
+**Status:** built, but it returns `{"status": "Ok"}` (capital O) and reports nothing about the index.
 
 ### 5.2 Records (CRUD and filters)
 
@@ -344,6 +390,13 @@ Referential integrity: creating or updating a portfolio with an unknown `fund_id
 clear message, and so does a total weight above 100. A single weight outside 0 to 100 returns 422
 (Pydantic). Deleting a fund used by a portfolio is not needed while funds are read-only.
 
+**Status:** funds (read-only), clients and portfolios are implemented as in the table, with the
+status codes shown (create and delete return 200, not 201 or 204, for clients and portfolios). The
+**required filters are not implemented**: the list endpoints take no query parameters, so none of the
+four example queries above work. `POST /clients` requires `client_name`; every other client field
+is optional, and `PUT` leaves a field unchanged when it is `null` or absent. The portfolio total-weight
+check covers positions only (see 4.3).
+
 ### 5.3 Error handling (one consistent scheme)
 
 | Situation | Status |
@@ -360,9 +413,21 @@ clear message, and so does a total weight above 100. A single weight outside 0 t
 Implement this once (shared handler or a helper used by every router) so behaviour is identical
 everywhere. Never leak stack traces or keys to clients.
 
+**Status:** not built as a scheme. Routers raise `HTTPException` for 404 and 400, and Pydantic gives
+422. `POST /knowledge/search` turns a `RuntimeError` into 409, but the Chroma search never raises
+one, so an empty index currently returns an empty result list. There is no mapping for 429, 502, 504
+or 500, and no handler for provider errors (the Anthropic exception classes are imported in
+`routers/knowledge.py` but unused).
+
 ---
 
 ## 6. LLM features
+
+**Status of section 6: not built.** There are no summary, streaming, client-fit or token-estimate
+endpoints, no `insights` router and no `MandateFitAssessment` model. `AI_Layer/llm.py` contains only
+the Anthropic client, the model name and a short `SYSTEM_PROMPT` (British English, client-friendly,
+use only the figures given, never invent facts). The standing rules in 6.1 (no advice, no forecasts,
+risk warning line) are not yet in any prompt, and `test_llm.py` is empty.
 
 ### 6.1 Prompt design rules
 
@@ -496,6 +561,13 @@ Store these as Chroma metadata: `doc_type`, `document_date`, `as_of_date`, `fund
 metadata values, so store dates as ISO strings and **leave out** a key whose value is `None` rather
 than writing it. A search result with no `fund_id` key then means "firm-wide or client document".
 
+**Status:** built in `Data/knowledge_store.py` and `POST /knowledge/index`, with these differences from
+the spec: the metadata key is `type`, not `doc_type`; it also stores `title` and `effective_date`;
+`fund_id` and `client_id` are written even when `None` (the "leave out" rule is not followed); and
+the response is `{"indexed": count(), "embedding_tokens": n}`, where `count()` returns
+`collection.count` without calling it, so the `indexed` value is not yet a number. The Chroma
+collection is `Asset_Management_docs` with cosine space, at `./chroma_store`.
+
 Chunking decision: documents of one to two pages can be embedded whole, which keeps context
 intact. The longest current document (`doc-01`) is about 310 words, so **none of the 25 reaches the
 roughly 500-word threshold and all are embedded whole**. If a longer document is added, split it
@@ -509,6 +581,12 @@ document. Record your decision and reasoning in the design note.
 built, return 409, not 500.
 
 Convert Chroma distance to a similarity score consistently and document the formula you used.
+
+**Status:** built. The request body is `{"question": str (min 3 chars), "top_k": int (default 3, 1 to 8)}`.
+The formula is `score = 1 - cosine distance`. Each result is `id`, the stored metadata (`title`,
+`type`, the dates, `fund_id`, `client_id`, `status`, `authority`, `scope`), the **full document text**
+with whitespace collapsed (not a snippet), and `score`. There is no `stale` flag, and an empty index
+does not yet give 409 (see 5.3).
 
 ### 7.4 Grounded question answering (with refusal)
 
@@ -533,6 +611,10 @@ low: unrelated questions get a confident answer. Too high: legitimate questions 
 return forecasts are refused regardless of score, using a simple classifier check (a cheap
 keyword rule or a small dedicated model call) before retrieval.
 
+**Status: not built.** There is no `/knowledge/ask` endpoint, no advice or forecast check, and no
+retrieval-to-Claude step. `RELEVANCE_FLOOR` (from `config.py`, default 0.45) is assigned in `routers/knowledge.py` but
+nothing reads it, and no test-question scores have been recorded to justify it.
+
 ### 7.5 Time sensitivity
 
 Fund commentary goes stale. For each result compute age in days from `as_of_date`. Flag results
@@ -546,10 +628,15 @@ records are a snapshot at 31 December 2024, so measured against today's date nea
 would be stale. Either age documents against the latest `data_as_of_date` or accept that most
 are stale, and record the choice in the design note.
 
+**Status: not built.** No age, `stale` flag, score down-weighting or `historical` warning is computed,
+and `STALE_AFTER_DAYS` (in `config.py`, default 120) is not used yet.
+
 ### 7.6 Answer grounding checks (to implement later)
 
-Not built yet. `AI_Layer/grounding.py` holds the cheap structural checks (pure functions: no network,
-no model, no FastAPI). This section lists what is still missing around it.
+Partly built. `AI_Layer/grounding.py` holds the cheap structural checks (pure functions: no network,
+no model, no FastAPI): `REFUSAL_SENTENCE`, `normalise`, `is_refusal`, `split_sentences`,
+`citations_in` and `check_citations`. `check_citations` still contains a debug `print`. Nothing
+imports the module and it has no tests. This section lists what is still missing around it.
 
 1. **Prompt side (`llm.py`).** Label each retrieved passage in the context with its `doc-NN` id, tell
    the model to cite every claim as `[doc-NN]`, give it the exact `REFUSAL_SENTENCE` to use when the
@@ -603,13 +690,17 @@ For a portfolio, look through positions: effective exposure to a sector is the s
 is not linked to a client, so it is checked against a client chosen at request time.
 
 Compliance depends on these rules, so the tests for them are the highest-value tests in the project.
-Until code that applies the rules exists (for the client-fit endpoint and the agent), the tests use a
-helper in `test_clients.py`, so they check the seed data against the rule spec, not product code.
-When the rule code is written, move that helper into it and import it in the tests.
+No code applies the rules yet (the client-fit endpoint and the agent do not exist). The tests use
+helpers instead: `breached_rules` in `test_clients.py` (five rules on a client/fund pair) and
+`look_through_exposure` in `test_portfolio.py`. They check the seed data against the rule spec, not
+product code. When the rule code is written, move those helpers into it and import it in the tests.
 
 ---
 
 ## 9. Agent (tool use)
+
+**Status of sections 9 and 10: not built.** There is no `agent.py`, no agent router, no tools,
+nothing uses `AGENT_MAX_ITERATIONS` (defined in `config.py`), and the UI folder is empty. Both sections are specification only.
 
 ### 9.1 Tools
 
@@ -726,7 +817,7 @@ or depend on the network in tests.
 
 | Area | What to prove |
 |---|---|
-| `test_funds.py` | listing and 404s; every fund's risk, fee and ESG values in range; holding sectors are in `SECTORS`; `Percentage_of_fund_represented` equals the holdings sum and is at least 25; four quarters of `NAV_per_share`; each seed edge case (Fund 2 tobacco 3%, Fund 3 clean, Fund 4 12% holding, Fund 5 on the limits, Fund 6 high fee and unrated, Fund 7 riskiest) |
+| `test_funds.py` | listing and 404s; every fund's risk, fee and ESG values in range; holding sectors are in `SECTORS`; `Percentage_of_fund_represented` equals the holdings sum and is at least 25; four quarters of `NAV_per_share`; the bond fund's duration and yield. The seed edge cases (Fund 2 tobacco 3%, Fund 3 clean, Fund 4 12% holding, Fund 5 on the limits, Fund 6 unrated, Fund 7 riskiest) are exercised through the mandate tests in `test_clients.py`, not here |
 | `test_clients.py` | CRUD, 404s, null-means-unchanged updates, sector validation (422); mandate rules on client/fund pairs: each rule breaches and clears, equality with a limit passes, `None` rules are skipped, `unrated` fails an ESG minimum, excluded-sector weights are reported |
 | `test_portfolio.py` | CRUD, 404s, validation (unknown fund, total over 100, weight out of range); seed portfolios point at real funds and total 100 with cash; Portfolio 4's cash; look-through exposure maths (Portfolio 5 tobacco 0.45%), cash ignored, zero exposure |
 | Document integrity | every document's `fund_id` and `client_id` exist in the records; each document's string `id` is `doc-` plus its dict key zero-padded to two digits (key 1 gives `"doc-01"`), and ids are unique |
@@ -738,6 +829,13 @@ or depend on the network in tests.
 | Agent loop | normal completion; tool call then answer; unknown tool reported as error, not raised; missing argument; tool exception; **model that never stops** ends at `AGENT_MAX_ITERATIONS` with `completed: false` |
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` |
+
+**Status:** only the first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`), and
+`conftest.py` sets placeholder API keys (always overriding any real key, so a stray provider call
+fails instead of spending money) and restores `CLIENTS` and `PORTFOLIOS` between tests. Not written: document integrity,
+filters, summary, refusal, advice refusal, grounding checks, agent loop, error mapping and structured
+analysis tests. No test uses a mock. `test_llm.py` is an empty file. No current test calls Claude,
+Voyage or Chroma.
 
 Mocking approach: replace the client's `create` method and the embedding function with fakes using
 `monkeypatch`. For the iteration limit test, make the fake model return a tool request every time,
@@ -770,20 +868,23 @@ question correctly refused (for example "should my client buy this fund?").
 You should be able to explain what every button does end to end, including exactly what is sent
 to Voyage, Chroma and Claude.
 
+**Status: not started.** There is no README in either project, no design note,
+and the demo needs `/knowledge/ask` and the agent, which do not exist.
+
 ---
 
 ## 13. Build order
 
-| Stage | Deliverable | Done when |
-|---|---|---|
-| 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass |
-| 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files |
-| 3 | Mandate rules tested in `test_clients.py`, `test_funds.py` and `test_portfolio.py` | every rule and seed edge case tested |
-| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude |
-| 5 | Indexing, search, grounded answers, floor tuning, staleness | refusal tested, scores recorded |
-| 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit |
-| 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API |
-| 8 | Hardening, READMEs, design note, demo rehearsal | fresh checkout runs from the README |
+| Stage | Deliverable | Done when | Status |
+|---|---|---|---|
+| 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass | Done, except the document integrity test (section 11) |
+| 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
+| 3 | Mandate rules tested in `test_clients.py`, `test_funds.py` and `test_portfolio.py` | every rule and seed edge case tested | Done in `test_clients.py` and `test_portfolio.py`, as test helpers only |
+| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Not started (client and system prompt only) |
+| 5 | Indexing, search, grounded answers, floor tuning, staleness | refusal tested, scores recorded | Partial: indexing and search only |
+| 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Not started |
+| 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API | Not started |
+| 8 | Hardening, READMEs, design note, demo rehearsal | fresh checkout runs from the README | Not started |
 
 ### Stretch goals
 

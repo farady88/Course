@@ -3,10 +3,11 @@ from pydantic import BaseModel, Field
 from anthropic import APIStatusError, APITimeoutError, RateLimitError
 #import grounding
 #import llm
+import config
 import Data.knowledge_store as knowledge
 
 
-RELEVANCE_FLOOR = 0.45
+RELEVANCE_FLOOR = config.RELEVANCE_FLOOR
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
