@@ -21,7 +21,7 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | Configuration (section 3) | Built | `config.py` reads environment variables; no `.env.example` (see section 3) |
 | LLM features (section 6) | Not built | `AI_Layer/llm.py` holds only the Anthropic client, `MODEL` and `SYSTEM_PROMPT` |
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
-| `POST /knowledge/ask`, refusal, staleness (7.4, 7.5) | Not built | `RELEVANCE_FLOOR = 0.45` is defined in the router but unused; floor not tuned |
+| `POST /knowledge/ask`, refusal (7.4) | Not built | `RELEVANCE_FLOOR = 0.45` is defined in the router but unused; floor not tuned |
 | Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` pure functions only; not wired in, no tests |
 | Mandate rules (section 8) | Tests only | no product code; the rules live in test helpers |
 | Agent (section 9) | Not built | |
@@ -101,7 +101,7 @@ records.py (FUNDS, CLIENTS, PORTFOLIOS)
 
 docs.py (DOCUMENTS)
     -> knowledge_store.index: embed with Voyage (document type), upsert into Chroma
-    -> knowledge_store.search: embed query (query type), Chroma top k, score, floor, staleness
+    -> knowledge_store.search: embed query (query type), Chroma top k, score, floor
     -> /knowledge/search, /knowledge/ask (refuse here, else Claude with retrieved text)
     -> agent tool: search_knowledge_base
 ```
@@ -216,7 +216,6 @@ All configuration comes from environment variables. No secrets in code. This pro
 | `CHROMA_PATH` | Persistent store directory | `./chroma_store` |
 | `RELEVANCE_FLOOR` | Minimum similarity to answer | tuned, see section 7 |
 | `AGENT_MAX_ITERATIONS` | Hard loop limit | 5 |
-| `STALE_AFTER_DAYS` | Document age flagged as stale | 120 |
 
 Load them in one `config.py` and fail fast with a clear message if a required key is missing.
 
@@ -225,8 +224,7 @@ environment, with the defaults shown (`voyage-3-lite`, `./chroma_store`, floor 0
 days), and `require(name)` raises a clear `RuntimeError` for a missing key. No secret is stored in
 code. `AI_Layer/llm.py` requires `ANTHROPIC_API_KEY` and `Data/knowledge.py` requires `VOYAGE_API_KEY`,
 each at import, so starting the server needs `VOYAGE_API_KEY` set in that terminal. The tests do not:
-`conftest.py` sets placeholder keys. `RELEVANCE_FLOOR`, `AGENT_MAX_ITERATIONS` and `STALE_AFTER_DAYS` are defined but nothing
-uses the last two yet. The client timeouts (Anthropic 50 s, Voyage 3 s) and retry counts are still
+`conftest.py` sets placeholder keys. `AGENT_MAX_ITERATIONS` is defined but nothing uses it yet. The client timeouts (Anthropic 50 s, Voyage 3 s) and retry counts are still
 hard-coded in their modules. There is no `.env.example` (you set keys by hand per terminal).
 
 ---
@@ -528,7 +526,7 @@ Each document has these fields:
 | `id` | str, zero-padded (`"doc-01"`); the id stored in Chroma and cited in answers. The dict key is the matching int (`1`) |
 | `title` | str |
 | `doc_type` | one of the types above |
-| `document_date`, `effective_date`, `as_of_date` | `date` objects; they differ only for dated commentary and agreements, so decide which one drives staleness (7.5) |
+| `document_date`, `effective_date`, `as_of_date` | `date` objects; they differ only for dated commentary and agreements (see 7.5) |
 | `fund_id` | int or `None`; set on fund-specific documents |
 | `client_id` | int or `None`; set on client agreements |
 | `status` | `active` or `historical` (`doc-08` and `doc-09` are historical) |
@@ -585,8 +583,7 @@ Convert Chroma distance to a similarity score consistently and document the form
 **Status:** built. The request body is `{"question": str (min 3 chars), "top_k": int (default 3, 1 to 8)}`.
 The formula is `score = 1 - cosine distance`. Each result is `id`, the stored metadata (`title`,
 `type`, the dates, `fund_id`, `client_id`, `status`, `authority`, `scope`), the **full document text**
-with whitespace collapsed (not a snippet), and `score`. There is no `stale` flag, and an empty index
-does not yet give 409 (see 5.3).
+with whitespace collapsed (not a snippet), and `score`. An empty index does not yet give 409 (see 5.3).
 
 ### 7.4 Grounded question answering (with refusal)
 
@@ -615,21 +612,14 @@ keyword rule or a small dedicated model call) before retrieval.
 retrieval-to-Claude step. `RELEVANCE_FLOOR` (from `config.py`, default 0.45) is assigned in `routers/knowledge.py` but
 nothing reads it, and no test-question scores have been recorded to justify it.
 
-### 7.5 Time sensitivity
+### 7.5 Document dates
 
-Fund commentary goes stale. For each result compute age in days from `as_of_date`. Flag results
-older than `STALE_AFTER_DAYS` with `"stale": true`, and either down-weight their score (for example
-multiply by 0.85) or show the warning. Tell the model the document date in the prompt so it can
-caveat ("as of Q1"). Documents with `status: "historical"` (8 and 9) should carry the warning
-whatever their age. `doc-09` (Q3 2023) is the deliberately old test case.
+Document dates are reference timestamps only. They never change a search score, ranking or refusal.
+They are stored as metadata and returned with each result, and the grounded-answer prompt (7.4) tells
+the model each passage's `as_of_date` and `status` so it can caveat ("as of Q1") when needed.
+`status: "historical"` (`doc-08` and `doc-09`) marks commentary that is no longer current.
 
-Choose the reference date for "age" deliberately. The seed documents are dated 2023 to 2024 and the
-records are a snapshot at 31 December 2024, so measured against today's date nearly every document
-would be stale. Either age documents against the latest `data_as_of_date` or accept that most
-are stale, and record the choice in the design note.
-
-**Status: not built.** No age, `stale` flag, score down-weighting or `historical` warning is computed,
-and `STALE_AFTER_DAYS` (in `config.py`, default 120) is not used yet.
+**Status:** the dates and `status` are stored and returned by search. Nothing else uses them yet.
 
 ### 7.6 Answer grounding checks (to implement later)
 
@@ -783,8 +773,7 @@ declined and why, rather than an error.
 
 ### 10.2 Search only
 
-Retrieval with no generation. List **every** result with title, score, document date and a stale
-badge. A 409 shows "The knowledge index has not been built" with guidance. Other failures show a
+Retrieval with no generation. List **every** result with title, score, document date and status. A 409 shows "The knowledge index has not been built" with guidance. Other failures show a
 generic error with the status code.
 
 ### 10.3 Streaming summary
@@ -881,7 +870,7 @@ and the demo needs `/knowledge/ask` and the agent, which do not exist.
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
 | 3 | Mandate rules tested in `test_clients.py`, `test_funds.py` and `test_portfolio.py` | every rule and seed edge case tested | Done in `test_clients.py` and `test_portfolio.py`, as test helpers only |
 | 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Not started (client and system prompt only) |
-| 5 | Indexing, search, grounded answers, floor tuning, staleness | refusal tested, scores recorded | Partial: indexing and search only |
+| 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing and search only |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Not started |
 | 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API | Not started |
 | 8 | Hardening, READMEs, design note, demo rehearsal | fresh checkout runs from the README | Not started |
