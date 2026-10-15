@@ -36,7 +36,7 @@ def test_provider_timeout_becomes_504(monkeypatch):
 #check that our estimate does not call the model 
 def test_estimate_does_not_call_the_model(monkeypatch): 
     monkeypatch.setattr(llm, "estimate_input_tokens", lambda firm: 137)
-    response = client.get("/firms/1/summary/estimate")
+    response = client.get("/firms/1/estimate-tokens")
 
     #asssertions 
     assert response.status_code == 200
