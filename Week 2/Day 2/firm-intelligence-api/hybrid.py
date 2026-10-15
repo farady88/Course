@@ -73,11 +73,11 @@ def search_with_vector(strategy: str, question: str, query_vector: list[float], 
                 "score": extra_cosine[chunk_id]
             }
 
-            # Our 3 extra fields 
-            hit["found_by"] = [name for name, found in (("vector", chunk_id in by_vector), ("keyword", chunk_id in by_keyword)) if found]
-            hit["exact_match"] = bool(wanted & set(bm25.tokenize(hit["text"])))
-            hit["rrf"] = round (rrf, 5)
-            hits.append(hit)
-        return hits
+        # Our 3 extra fields
+        hit["found_by"] = [name for name, found in (("vector", chunk_id in by_vector), ("keyword", chunk_id in by_keyword)) if found]
+        hit["exact_match"] = bool(wanted & set(bm25.tokenize(hit["text"])))
+        hit["rrf"] = round (rrf, 5)
+        hits.append(hit)
+    return hits
  
     
