@@ -93,8 +93,29 @@ def search_with_vectors(strategy: str, query_vectors: list[list[float]], k:int) 
     return[
         # Chroma returns 4 parallel nested list
         [
-            {"id": meta["doc_id"], "chnunk_id": chunk_id, "title": meta["title"], "text": text, "score": 1 - distance}
+            {"id": meta["doc_id"], "chunk_id": chunk_id, "title": meta["title"], "text": text, "score": 1 - distance}
             for chunk_id, text, meta, distance in zip(ids, docs, metas, dists)
         ]
         for  ids, docs, metas, dists in zip(result["ids"], result["documents"], result["metadatas"], result["distances"])
     ]
+
+"A chunk that only keyword search found has no cosine score. Our relevance gate needs one"
+
+def cosine_for(strategy: str, query_vector: list[float], chunk_ids: list[str]) -> dict[str, float]:
+    if not chunk_ids:
+        return{}
+
+    stored = collection_for(strategy).get(ids = chunk_ids, include = ["embeddings"])
+
+    return {
+        chunk_id: float(knowledge.cosine_similarity(query_vector, list(vector)))
+        for chunk_id, vector in zip(stored["ids"], stored["embeddings"])
+    }
+
+# Where it fits in hybrid.py
+    # Vector search returns its top 10 with a cosine 
+    # Keyword search returns its top 10
+    # RRF merges them 
+    # Any chunk in the keyword list but NOT in the vector list is passed to "cosine_for"
+    # Now every hit has a cosine so the gate works the same on all of them
+        # Score >= 0.45
