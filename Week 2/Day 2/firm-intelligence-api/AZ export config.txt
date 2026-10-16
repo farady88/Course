@@ -1,6 +1,0 @@
-export RG="rg-fde"
-export SEARCH_NAME="fde-search-faaruq"
-export LOCATION="uksouth"
-export SUB=$(az account show --query id -o tsv)
-export ME=$(az account show --query user.name -o tsv)
-export SCOPE="/subscriptions/$SUB/resourceGroups/$RG"
