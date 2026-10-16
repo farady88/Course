@@ -6,8 +6,8 @@ from llm import MODEL, client
 
 # agent system prompt
 AGENT_SYSTEM_PROMPT = (
-    "You are legal makrte analyst with access to tools to a search tool over a firm "
-    "intelligence knowledge base. Use the tool whenevr a question needs "
+    "You are legal market analyst with access to tools to a search tool over a firm "
+    "intelligence knowledge base. Use the tool whenever a question needs "
     "information you don't already have - do not guess. Cite document ids in  "
     "your final answer. If the tool returns nothing relevant, say so honestly."
 )
@@ -35,7 +35,7 @@ MAX_ITERATIONS = 4
 
 
 def ask_with_tools(question: str) -> dict:
-    """Run the tool-use loop until the model answers, orrrr the limit is hit"""
+    """Run the tool-use loop until the model answers, or the limit is hit"""
     messages = [{"role": "user", "content": question}]
     total_input_tokens = 0
     total_output_tokens = 0
