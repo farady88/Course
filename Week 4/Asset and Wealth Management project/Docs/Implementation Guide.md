@@ -19,14 +19,15 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | Funds (read-only), Clients, Portfolios | Built (partial) | list, get, create, update, delete as in 5.2. **No query filters** |
 | Error scheme (5.3) | Partial | 404, 400, 422 only. No shared handler, no 429/502/504/500 mapping |
 | Configuration (section 3) | Built | `config.py` reads environment variables; no `.env.example` (see section 3) |
-| LLM features (section 6) | Not built | `AI_Layer/llm.py` holds only the Anthropic client, `MODEL` and `SYSTEM_PROMPT` |
+| LLM features (section 6) | Not built | `AI_Layer/llm.py` holds only the Anthropic client, `MODEL` and `SYSTEM_PROMPT`. It has a broken `import grounding` (see 7.6), so it cannot be imported |
+| `POST /insights/client-fit` (6.4) | Stub, not working | `routers/insights.py` runs the mandate rules, then calls `llm.assess_client_fit` and `map_provider_errors`, neither of which exists. Not registered in `main.py` |
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
 | `POST /knowledge/ask`, refusal (7.4) | Not built | `RELEVANCE_FLOOR = 0.45` is defined in the router but unused; floor not tuned |
-| Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` pure functions only; not wired in, no tests |
-| Mandate rules (section 8) | Tests only | no product code; the rules live in test helpers |
+| Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` pure functions only; not wired in, no tests (debug `print` removed) |
+| Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions, used by the tests and the `insights` stub. Not yet reachable through a working endpoint |
 | Agent (section 9) | Not built | |
 | Streamlit UI (section 10) | Not built | `Asset Management - UI/` is an empty folder |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`; `test_llm.py` is empty; no mocks yet |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py` (26 tests pass); the mandate tests call `mandate.py`; `test_llm.py` is empty; no mocks yet |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -95,7 +96,7 @@ determined by deterministic screening"), meaning the mandate rules in section 8 
 ```
 records.py (FUNDS, CLIENTS, PORTFOLIOS)
     -> routers (CRUD, filters, read-only funds)        structured lookups
-    -> mandate rules (section 8), checked by the tests  compliance facts
+    -> mandate.py (section 8), checked by the tests     compliance facts
     -> llm.py (summary, streaming, client-fit)         record fields go into the prompt
     -> agent tools: get_fund, check_mandate
 
@@ -151,7 +152,7 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **Deterministic mandate rules**
 - *What:* Ordinary code that checks exact rules on exact numbers.
-- *Here:* The rules in section 8 cover excluded sectors, risk, concentration, ESG and fees. They are pinned down by the tests in `test_clients.py` and `test_portfolio.py` (`test_funds.py` checks record integrity only). Their result is the source of truth for compliance, and the model may only explain it.
+- *Here:* The rules in section 8 cover excluded sectors, risk, concentration, ESG and fees. They live in `mandate.py` and are pinned down by the tests in `test_clients.py` and `test_portfolio.py` (`test_funds.py` checks record integrity only). Their result is the source of truth for compliance, and the model may only explain it.
 
 **FastAPI and Pydantic**
 - *What:* FastAPI is a Python web framework. Pydantic validates data against typed models.
@@ -173,6 +174,7 @@ What exists today:
 Asset Management - API/
   main.py                 app creation, router registration, /health
   config.py               environment variables and thresholds
+  mandate.py              deterministic mandate rules: check_fund, look_through_exposure, ESG_ORDER
   Data/
     records.py            in-memory record store and seed data (SECTORS, FUNDS, CLIENTS, PORTFOLIOS)
     docs.py               the 25 source documents (DOCUMENTS dict and DOCUMENT_LIST for the knowledge base)
@@ -184,18 +186,19 @@ Asset Management - API/
     grounding.py          pure citation checks (7.6)
   routers/
     funds.py  clients.py  portfolio.py  knowledge.py
+    insights.py           POST /insights/client-fit stub (not registered, not working: see 6.4)
   tests/
     test_funds.py         fund reads and 404, record integrity, bond fields
-    test_clients.py       client CRUD and validation, mandate rules on client/fund pairs (test helper)
-    test_portfolio.py     portfolio CRUD and validation, seed portfolios, look-through exposure (test helper)
+    test_clients.py       client CRUD and validation, mandate rules on client/fund pairs (calls mandate.check_fund)
+    test_portfolio.py     portfolio CRUD and validation, seed portfolios, look-through exposure (calls mandate.look_through_exposure)
     test_llm.py           empty
     conftest.py           restores CLIENTS and PORTFOLIOS after every test
 requirements.txt          at the repository root, not inside the API folder
 Asset Management - UI/    empty
 ```
 
-Still to create: `models.py`, `agent.py`, `routers/insights.py`, `routers/agent.py`,
-the UI's `app.py` and both READMEs. Request and response models currently live
+Still to create: `models.py`, `agent.py`, `routers/agent.py`,
+the UI's `app.py` and both READMEs. `routers/insights.py` exists but is unfinished. Request and response models currently live
 inside each router file.
 
 Keep business logic (`agent.py`, `llm.py`) free of FastAPI imports so it can be
@@ -421,11 +424,11 @@ or 500, and no handler for provider errors (the Anthropic exception classes are 
 
 ## 6. LLM features
 
-**Status of section 6: not built.** There are no summary, streaming, client-fit or token-estimate
-endpoints, no `insights` router and no `MandateFitAssessment` model. `AI_Layer/llm.py` contains only
+**Status of section 6: not built.** There are no summary, streaming or token-estimate
+endpoints and no `MandateFitAssessment` model. `routers/insights.py` has a `POST /insights/client-fit` stub (see 6.4). `AI_Layer/llm.py` contains only
 the Anthropic client, the model name and a short `SYSTEM_PROMPT` (British English, client-friendly,
 use only the figures given, never invent facts). The standing rules in 6.1 (no advice, no forecasts,
-risk warning line) are not yet in any prompt, and `test_llm.py` is empty.
+risk warning line) are not yet in any prompt, and `test_llm.py` is empty. `llm.py` also starts with `import grounding`, which fails (the module sits in the same package, so it needs `from AI_Layer import grounding`), so `llm.py` cannot be imported until that is fixed.
 
 ### 6.1 Prompt design rules
 
@@ -485,6 +488,8 @@ Use tool-based forced structured output (define the schema as a tool and require
 then validate with `model_validate`. If validation fails, retry once, then return 502. Consistency
 rule: if the mandate rules found a breach, the model's `fits` must be false. Enforce this in code after
 validation. Do not trust the model to agree.
+
+**Status: stub, does not work.** `routers/insights.py` defines `ClientFit` (`fund_id`, `client_id`) and `POST /insights/client-fit`. It looks up the fund and client (404 if absent), runs `mandate.check_fund` and returns `{**assessment, "rule_breaches": breaches}`. The mandate step is real. The rest is missing: `llm.assess_client_fit` and `map_provider_errors` are not defined anywhere, so the call would raise a `NameError`, and the router is not included in `main.py`, so the endpoint is not served. `llm.py` also fails to import (see section 6). There is no `Breach` or `MandateFitAssessment` model, no retry and no 502, and the `fits = false` rule is not enforced in code yet. `rule_breaches` is the computed truth in the response.
 
 ### 6.5 Token accounting
 
@@ -562,8 +567,7 @@ than writing it. A search result with no `fund_id` key then means "firm-wide or 
 **Status:** built in `Data/knowledge_store.py` and `POST /knowledge/index`, with these differences from
 the spec: the metadata key is `type`, not `doc_type`; it also stores `title` and `effective_date`;
 `fund_id` and `client_id` are written even when `None` (the "leave out" rule is not followed); and
-the response is `{"indexed": count(), "embedding_tokens": n}`, where `count()` returns
-`collection.count` without calling it, so the `indexed` value is not yet a number. The Chroma
+the response is `{"indexed": count(), "embedding_tokens": n}`, where `count()` returns `collection.count()`, the number of documents in the collection. The Chroma
 collection is `Asset_Management_docs` with cosine space, at `./chroma_store`.
 
 Chunking decision: documents of one to two pages can be embedded whole, which keeps context
@@ -625,8 +629,7 @@ the model each passage's `as_of_date` and `status` so it can caveat ("as of Q1")
 
 Partly built. `AI_Layer/grounding.py` holds the cheap structural checks (pure functions: no network,
 no model, no FastAPI): `REFUSAL_SENTENCE`, `normalise`, `is_refusal`, `split_sentences`,
-`citations_in` and `check_citations`. `check_citations` still contains a debug `print`. Nothing
-imports the module and it has no tests. This section lists what is still missing around it.
+`citations_in` and `check_citations`. The debug `print` has been removed. Only `llm.py` imports the module, and that import is broken (`import grounding` instead of `from AI_Layer import grounding`). It has no tests. This section lists what is still missing around it.
 
 1. **Prompt side (`llm.py`).** Label each retrieved passage in the context with its `doc-NN` id, tell
    the model to cite every claim as `[doc-NN]`, give it the exact `REFUSAL_SENTENCE` to use when the
@@ -652,8 +655,8 @@ imports the module and it has no tests. This section lists what is still missing
 
 The mandate rules read **only `records.py` data** (`FUNDS`, `CLIENTS`, `PORTFOLIOS`), never the
 documents. The documents explain these rules; the code applies them (`doc-11`, `doc-16`, `doc-17` and `doc-18`
-describe the conventions used below). There is no separate screening module. The rules are
-specified here and pinned down by the tests (section 11), which exercise them through the API.
+describe the conventions used below). The rules are implemented in `mandate.py` and pinned down by
+the tests (section 11), which call it directly.
 
 For a fund and a client, the checks are:
 
@@ -680,10 +683,22 @@ For a portfolio, look through positions: effective exposure to a sector is the s
 is not linked to a client, so it is checked against a client chosen at request time.
 
 Compliance depends on these rules, so the tests for them are the highest-value tests in the project.
-No code applies the rules yet (the client-fit endpoint and the agent do not exist). The tests use
-helpers instead: `breached_rules` in `test_clients.py` (five rules on a client/fund pair) and
-`look_through_exposure` in `test_portfolio.py`. They check the seed data against the rule spec, not
-product code. When the rule code is written, move those helpers into it and import it in the tests.
+
+**Status: built** as `Asset Management - API/mandate.py`, pure functions with no network, model or
+FastAPI imports (it reads `FUNDS` only):
+
+- `check_fund(client, fund)` applies the five checks and returns a list of breaches, empty when there
+  are none. Each breach is `{"rule", "actual", "limit", "detail"}`, with `rule` one of `excluded_sector`,
+  `risk`, `concentration`, `esg`, `fee`. For `excluded_sector`, `actual` is a dict of sector to total
+  weight. It follows the conventions above: equal to a limit passes, a `None` client rule is skipped,
+  and `unrated` ranks 0 so it fails any ESG minimum (`ESG_ORDER = {"A": 4, "B": 3, "C": 2, "D": 1}`).
+- `look_through_exposure(portfolio, sector)` returns the sum of `position_weight * holding_weight / 100`
+  and ignores cash.
+
+The tests call it: `breached_rules` in `test_clients.py` wraps `mandate.check_fund`, and `test_portfolio.py`
+wraps `mandate.look_through_exposure`. Only `POST /insights/client-fit` calls `check_fund` in product code,
+and that endpoint does not work yet (see 6.4). There is no check of a whole portfolio against a client,
+and the agent's `check_mandate` tool does not exist.
 
 ---
 
@@ -697,7 +712,7 @@ nothing uses `AGENT_MAX_ITERATIONS` (defined in `config.py`), and the UI folder 
 | Tool | Input | What it does |
 |---|---|---|
 | `search_knowledge_base` | `query` | semantic search, returns top passages with ids and scores |
-| `check_mandate` | `client_id`, and `fund_id` or `portfolio_id` | applies the mandate rules from section 8 to real records |
+| `check_mandate` | `client_id`, and `fund_id` or `portfolio_id` | applies the mandate rules from section 8 to real records (build on `mandate.check_fund` and `look_through_exposure`; there is no whole-portfolio check yet) |
 | optional `get_fund` | `fund_id` | returns a fund's structured facts |
 
 Data sources: `search_knowledge_base` reads the document stream (`docs.py` via Chroma). `check_mandate`
@@ -819,7 +834,7 @@ or depend on the network in tests.
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` |
 
-**Status:** only the first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`), and
+**Status:** only the first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; 26 tests pass, and the mandate tests now call `mandate.py`), and
 `conftest.py` sets placeholder API keys (always overriding any real key, so a stray provider call
 fails instead of spending money) and restores `CLIENTS` and `PORTFOLIOS` between tests. Not written: document integrity,
 filters, summary, refusal, advice refusal, grounding checks, agent loop, error mapping and structured
@@ -868,8 +883,8 @@ and the demo needs `/knowledge/ask` and the agent, which do not exist.
 |---|---|---|---|
 | 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass | Done, except the document integrity test (section 11) |
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
-| 3 | Mandate rules tested in `test_clients.py`, `test_funds.py` and `test_portfolio.py` | every rule and seed edge case tested | Done in `test_clients.py` and `test_portfolio.py`, as test helpers only |
-| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Not started (client and system prompt only) |
+| 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested. No whole-portfolio check yet |
+| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Barely started: client and system prompt, plus an unfinished `/insights/client-fit` stub (mandate step only) |
 | 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing and search only |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Not started |
 | 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API | Not started |
