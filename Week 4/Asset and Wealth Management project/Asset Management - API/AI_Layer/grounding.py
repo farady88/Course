@@ -58,7 +58,6 @@ def check_citations(answer: str | None, source_ids: list[str]) -> dict:
     invalid = [doc_id for doc_id in cited if doc_id not in source_ids]
     # Very short sentences("yes." or "In Summary:") are claims not worth policing
     uncited = [s for s in sentences if not CITATION.search(s) and len(s.split()) >= 3]
-    print(uncited)
 
     return {
         "refusal": False,

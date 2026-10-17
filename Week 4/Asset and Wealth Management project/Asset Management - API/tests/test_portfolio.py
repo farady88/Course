@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 #Data/records.py (which contains the PORTFOLIOS and FUNDS data)
 import pytest
 from fastapi.testclient import TestClient
+import mandate
 from main import app
 from Data.records import PORTFOLIOS, FUNDS
 
@@ -216,15 +217,7 @@ def test_portfolio_validation():
 
 
 def look_through_exposure(portfolio_id, sector):
-    """Effective exposure to a sector: the sum of position weight x holding weight / 100"""
-    portfolio = client.get(f"/portfolios/{portfolio_id}").json()
-    total = 0.0
-    for position in portfolio["positions"]:
-        fund = client.get(f"/funds/{position['fund_id']}").json()
-        for holding in fund["holdings"]:
-            if holding["sector"] == sector:
-                total += position["weight_pct"] * holding["weight_pct"] / 100
-    return total
+    return mandate.look_through_exposure(PORTFOLIOS[portfolio_id], sector)
 
 
 def test_seed_portfolios_are_valid():

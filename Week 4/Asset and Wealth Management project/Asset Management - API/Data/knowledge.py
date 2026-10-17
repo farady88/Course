@@ -8,9 +8,9 @@ from Data.docs import DOCUMENTS
 EMBED_MODEL = config.VOYAGE_MODEL
 
 voyage = voyageai.Client(
-    api_key=config.require("VOYAGE_API_KEY"),
-    max_retries=3,
-    timeout=3
+    api_key = config.require("VOYAGE_API_KEY"),
+    max_retries = 3,
+    timeout = 3
 )
 
 

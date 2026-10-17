@@ -11,7 +11,7 @@ collection = chroma.get_or_create_collection(
 )
 
 def count() -> int:
-    return collection.count
+    return collection.count()
 
 def build_index() -> int:
     "Embed every document and hand the vectors to Chroma."
