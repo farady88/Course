@@ -41,10 +41,10 @@ def build_prompt(firm:dict) -> str:
 def summarise_firm(firm: dict) -> dict:
     # one LLM call... returns the text plus what it costs to get it.
     response = client.messages.create(
-        model=MODEL,
-        max_tokens=400,
-        system=SYSTEM_PROMPT,
-        messages=[
+        model = MODEL,
+        max_tokens = 400,
+        system = SYSTEM_PROMPT,
+        messages = [
             {"role": "user", "content": build_prompt(firm)}],
     )
     return {
@@ -61,9 +61,9 @@ def estimate_input_tokens(firm: dict) -> int:
     """Count tokens BEFORE sending. Costs nothing, tells you what a call
     will cost"""
     counted = client.messages.count_tokens(
-        model=MODEL,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": build_prompt(firm)}],
+        model = MODEL,
+        system = SYSTEM_PROMPT,
+        messages = [{"role": "user", "content": build_prompt(firm)}],
     )
     return counted.input_tokens
 
@@ -71,10 +71,10 @@ def stream_firm_summary(firm: dict):
     """Yields text chunks as they arrive... rather than waiting for 
     the whole response."""
     with client.messages.stream(
-       model=MODEL,
-       max_tokens=400,
-       system=SYSTEM_PROMPT,
-       messages=[
+       model = MODEL,
+       max_tokens = 400,
+       system = SYSTEM_PROMPT,
+       messages = [
         {"role": "user", "content": build_prompt(firm)}],
     ) as stream:
         for text in stream.text_stream:
