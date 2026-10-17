@@ -56,7 +56,7 @@ def summarise_firm(firm: dict) -> dict:
         "stop_reason": response.stop_reason,
     }
 
-#messages.count_tokens tell you how big a request is WITHOUT SENDING IT... its a separate, much cheaper endpoint.
+# messages.count_tokens tell you how big a request is WITHOUT SENDING IT... its a separate, much cheaper endpoint.
 def estimate_input_tokens(firm: dict) -> int:
     """Count tokens BEFORE sending. Costs nothing, tells you what a call
     will cost"""
