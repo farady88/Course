@@ -19,15 +19,15 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | Funds (read-only), Clients, Portfolios | Built (partial) | list, get, create, update, delete as in 5.2. **No query filters** |
 | Error scheme (5.3) | Partial | 404, 400, 422 only. No shared handler, no 429/502/504/500 mapping |
 | Configuration (section 3) | Built | `config.py` reads environment variables; no `.env.example` (see section 3) |
-| LLM features (section 6) | Not built | `AI_Layer/llm.py` holds only the Anthropic client, `MODEL` and `SYSTEM_PROMPT`. It has a broken `import grounding` (see 7.6), so it cannot be imported |
-| `POST /insights/client-fit` (6.4) | Stub, not working | `routers/insights.py` runs the mandate rules, then calls `llm.assess_client_fit` and `map_provider_errors`, neither of which exists. Not registered in `main.py` |
+| LLM features (section 6) | Partial | `AI_Layer/llm.py` holds the Anthropic client, `MODEL`, `GROUNDED_SYSTEM_PROMPT` and `answer_from_context` (the grounded-answer call used by 7.4). It imports cleanly. No summary, streaming or structured-analysis functions yet |
+| `POST /insights/client-fit` (6.4) | Not built | The old stub was removed when `routers/insights.py` was rewritten for `/insights/ask`. No endpoint calls `mandate.check_fund` |
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
-| `POST /knowledge/ask`, refusal (7.4) | Not built | `RELEVANCE_FLOOR = 0.45` is defined in the router but unused; floor not tuned |
-| Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` pure functions only; not wired in, no tests (debug `print` removed) |
-| Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions, used by the tests and the `insights` stub. Not yet reachable through a working endpoint |
+| `POST /insights/ask`, refusal (7.4) | Built (partial) | In `routers/insights.py`, registered in `main.py` (the spec calls this `/knowledge/ask`). Retrieve, relevance floor (refuses without calling Claude), labelled context, Claude, grounding check, provider errors mapped to 429/504/502. Not built: advice/forecast check, floor tuning, retry |
+| Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` is now wired into `/insights/ask` and acted on (see 7.6). Only covered by the endpoint tests, no direct unit tests of the pure functions |
+| Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions, used by the tests only. Not reachable through any endpoint |
 | Agent (section 9) | Not built | |
 | Streamlit UI (section 10) | Not built | `Asset Management - UI/` is an empty folder |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py` (26 tests pass); the mandate tests call `mandate.py`; `test_llm.py` is empty; no mocks yet |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py` (31 tests pass); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask` |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -103,7 +103,7 @@ records.py (FUNDS, CLIENTS, PORTFOLIOS)
 docs.py (DOCUMENTS)
     -> knowledge_store.index: embed with Voyage (document type), upsert into Chroma
     -> knowledge_store.search: embed query (query type), Chroma top k, score, floor
-    -> /knowledge/search, /knowledge/ask (refuse here, else Claude with retrieved text)
+    -> /knowledge/search, /insights/ask (refuse here, else Claude with retrieved text; spec name /knowledge/ask)
     -> agent tool: search_knowledge_base
 ```
 
@@ -182,23 +182,23 @@ Asset Management - API/
                           search, cosine_similarity) that the API does not use
     knowledge_store.py    Chroma + Voyage: build_index, search, count
   AI_Layer/
-    llm.py                Anthropic client, MODEL, SYSTEM_PROMPT only
+    llm.py                Anthropic client, MODEL, GROUNDED_SYSTEM_PROMPT, answer_from_context
     grounding.py          pure citation checks (7.6)
   routers/
     funds.py  clients.py  portfolio.py  knowledge.py
-    insights.py           POST /insights/client-fit stub (not registered, not working: see 6.4)
+    insights.py           POST /insights/ask (7.4): retrieve, floor, context, Claude, grounding check
   tests/
     test_funds.py         fund reads and 404, record integrity, bond fields
     test_clients.py       client CRUD and validation, mandate rules on client/fund pairs (calls mandate.check_fund)
     test_portfolio.py     portfolio CRUD and validation, seed portfolios, look-through exposure (calls mandate.look_through_exposure)
-    test_llm.py           empty
+    test_llm.py           /insights/ask with retrieval and the model mocked (floor, citations, refusals)
     conftest.py           restores CLIENTS and PORTFOLIOS after every test
 requirements.txt          at the repository root, not inside the API folder
 Asset Management - UI/    empty
 ```
 
 Still to create: `models.py`, `agent.py`, `routers/agent.py`,
-the UI's `app.py` and both READMEs. `routers/insights.py` exists but is unfinished. Request and response models currently live
+the UI's `app.py` and both READMEs. `routers/insights.py` holds only `/insights/ask` so far. Request and response models currently live
 inside each router file.
 
 Keep business logic (`agent.py`, `llm.py`) free of FastAPI imports so it can be
@@ -416,19 +416,22 @@ everywhere. Never leak stack traces or keys to clients.
 
 **Status:** not built as a scheme. Routers raise `HTTPException` for 404 and 400, and Pydantic gives
 422. `POST /knowledge/search` turns a `RuntimeError` into 409, but the Chroma search never raises
-one, so an empty index currently returns an empty result list. There is no mapping for 429, 502, 504
-or 500, and no handler for provider errors (the Anthropic exception classes are imported in
+one, so an empty index currently returns an empty result list. `POST /insights/ask` maps Anthropic errors inline
+(rate limit 429, timeout 504, other status errors 502), but there is no shared handler, no mapping for
+Voyage or Chroma failures, and no 500 (the Anthropic exception classes are imported in
 `routers/knowledge.py` but unused).
 
 ---
 
 ## 6. LLM features
 
-**Status of section 6: not built.** There are no summary, streaming or token-estimate
-endpoints and no `MandateFitAssessment` model. `routers/insights.py` has a `POST /insights/client-fit` stub (see 6.4). `AI_Layer/llm.py` contains only
-the Anthropic client, the model name and a short `SYSTEM_PROMPT` (British English, client-friendly,
-use only the figures given, never invent facts). The standing rules in 6.1 (no advice, no forecasts,
-risk warning line) are not yet in any prompt, and `test_llm.py` is empty. `llm.py` also starts with `import grounding`, which fails (the module sits in the same package, so it needs `from AI_Layer import grounding`), so `llm.py` cannot be imported until that is fixed.
+**Status of section 6: mostly not built.** There are no summary, streaming or token-estimate
+endpoints, no `/insights/client-fit` and no `MandateFitAssessment` model. `AI_Layer/llm.py` contains
+the Anthropic client, the model name, `GROUNDED_SYSTEM_PROMPT` (British English, client-friendly,
+use only the figures given, cite `[doc-NN]`, caveat dated or historical passages, use the exact refusal
+sentence, never invent facts) and `answer_from_context`, which only serves the grounded answer in 7.4.
+The standing rules in 6.1 (no advice, no forecasts, risk warning line) are not yet in any prompt.
+The earlier broken grounding import is fixed (`import AI_Layer.grounding`), so `llm.py` imports cleanly.
 
 ### 6.1 Prompt design rules
 
@@ -489,7 +492,7 @@ then validate with `model_validate`. If validation fails, retry once, then retur
 rule: if the mandate rules found a breach, the model's `fits` must be false. Enforce this in code after
 validation. Do not trust the model to agree.
 
-**Status: stub, does not work.** `routers/insights.py` defines `ClientFit` (`fund_id`, `client_id`) and `POST /insights/client-fit`. It looks up the fund and client (404 if absent), runs `mandate.check_fund` and returns `{**assessment, "rule_breaches": breaches}`. The mandate step is real. The rest is missing: `llm.assess_client_fit` and `map_provider_errors` are not defined anywhere, so the call would raise a `NameError`, and the router is not included in `main.py`, so the endpoint is not served. `llm.py` also fails to import (see section 6). There is no `Breach` or `MandateFitAssessment` model, no retry and no 502, and the `fits = false` rule is not enforced in code yet. `rule_breaches` is the computed truth in the response.
+**Status: not built.** An earlier unfinished stub was removed when `routers/insights.py` was rewritten for `POST /insights/ask` (7.4). There is no `/insights/client-fit` endpoint, no `Breach` or `MandateFitAssessment` model, no `llm` function for it, no retry and no 502, and the `fits = false` rule is not enforced. The deterministic part (`mandate.check_fund`) exists and is tested, but nothing serves it.
 
 ### 6.5 Token accounting
 
@@ -612,9 +615,31 @@ low: unrelated questions get a confident answer. Too high: legitimate questions 
 return forecasts are refused regardless of score, using a simple classifier check (a cheap
 keyword rule or a small dedicated model call) before retrieval.
 
-**Status: not built.** There is no `/knowledge/ask` endpoint, no advice or forecast check, and no
-retrieval-to-Claude step. `RELEVANCE_FLOOR` (from `config.py`, default 0.45) is assigned in `routers/knowledge.py` but
-nothing reads it, and no test-question scores have been recorded to justify it.
+**Status: built (partial), at `POST /insights/ask`** (`routers/insights.py`, registered in `main.py`) rather than `/knowledge/ask`. It reuses `Question` from `routers/knowledge.py` (`question` min length 3, `top_k` 1 to 8, default 3) and is a plain `def`, not `async def`, because the Voyage and Anthropic clients block.
+
+1. `knowledge.search` retrieves the top k. Results scoring below `config.RELEVANCE_FLOOR` (default 0.45) are dropped.
+2. If none remain, it returns a refusal with no model call. An empty Chroma index also lands here (a refusal, not a 409).
+3. `build_context` labels each passage `[doc-NN] title (as of <as_of_date>, status: <status>)` followed by its text. `llm.answer_from_context` sends that and the question to Claude (`max_tokens` 500).
+4. Anthropic errors become 429 (rate limit), 504 (timeout) or 502 (other status error).
+5. `grounding.check_citations` runs against the retrieved ids and is acted on:
+   - the refusal sentence gives a refusal ("insufficient");
+   - a citation to an id that was not retrieved (`invalid`) gives a refusal;
+   - uncited sentences only flag the answer: it is returned with `grounding.passed: false`.
+
+Response shapes:
+
+```json
+{ "answer": "…[doc-10].", "refused": false,
+  "sources": [{"id": "doc-10", "title": "…", "score": 0.61}],
+  "grounding": {"refusal": false, "cited": ["doc-10"], "invalid": [], "uncited_sentences": [], "passed": true},
+  "input_tokens": 412, "output_tokens": 87, "stop_reason": "end_turn" }
+
+{ "answer": null, "refused": true, "reason": "No relevant document found.", "sources": [] }
+```
+
+`sources` lists only the passages the answer actually cited. Refusals after a model call also carry the token counts and `stop_reason`.
+
+**Not built:** the advice and forecast refusal check, tuning of the floor (no test-question scores recorded, so 0.45 is an untested default), retry on a failed grounding check, and any special handling of `stop_reason == "max_tokens"` (it is passed through, a truncated answer may lose its last citation).
 
 ### 7.5 Document dates
 
@@ -629,13 +654,16 @@ the model each passage's `as_of_date` and `status` so it can caveat ("as of Q1")
 
 Partly built. `AI_Layer/grounding.py` holds the cheap structural checks (pure functions: no network,
 no model, no FastAPI): `REFUSAL_SENTENCE`, `normalise`, `is_refusal`, `split_sentences`,
-`citations_in` and `check_citations`. The debug `print` has been removed. Only `llm.py` imports the module, and that import is broken (`import grounding` instead of `from AI_Layer import grounding`). It has no tests. This section lists what is still missing around it.
+`citations_in` and `check_citations`. The debug `print` has been removed. `llm.py` imports the module
+(fixed) and uses `REFUSAL_SENTENCE` in its prompt, and `routers/insights.py` calls `check_citations` and acts on the result
+(items 1 and 2 below are done). The pure functions are only tested indirectly through the `/insights/ask` tests. This section lists what is still missing.
 
-1. **Prompt side (`llm.py`).** Label each retrieved passage in the context with its `doc-NN` id, tell
+1. **Prompt side (`llm.py`). Done** (labels are built by `build_context` in `routers/insights.py`). Label each retrieved passage in the context with its `doc-NN` id, tell
    the model to cite every claim as `[doc-NN]`, give it the exact `REFUSAL_SENTENCE` to use when the
    passages are insufficient, and pass the same retrieved ids to `check_citations` as `source_ids`.
-2. **Act on a failed check.** `passed: false` must lead somewhere. Pick one and document it: retry
-   once, return the refusal, or return the answer with a flag. Nothing consumes the result today.
+2. **Act on a failed check. Done:** an invalid citation returns the refusal, and uncited sentences return the
+   answer with the `grounding` block as a flag. No retry. `passed: false` must lead somewhere. Pick one and document it: retry
+   once, return the refusal, or return the answer with a flag.
 3. **Citation drift.** `check_citations` only proves the cited id was one we supplied, not that the
    document supports the sentence. Add a second step: an LLM judge call, or a cheap check that the
    numbers in a sentence appear in the text of the document it cites. Until then, describe the module
@@ -696,8 +724,8 @@ FastAPI imports (it reads `FUNDS` only):
   and ignores cash.
 
 The tests call it: `breached_rules` in `test_clients.py` wraps `mandate.check_fund`, and `test_portfolio.py`
-wraps `mandate.look_through_exposure`. Only `POST /insights/client-fit` calls `check_fund` in product code,
-and that endpoint does not work yet (see 6.4). There is no check of a whole portfolio against a client,
+wraps `mandate.look_through_exposure`. No endpoint calls `check_fund` in product code yet
+(`/insights/client-fit` is not built, see 6.4). There is no check of a whole portfolio against a client,
 and the agent's `check_mandate` tool does not exist.
 
 ---
@@ -834,12 +862,14 @@ or depend on the network in tests.
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` |
 
-**Status:** only the first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; 26 tests pass, and the mandate tests now call `mandate.py`), and
+**Status:** the first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
+`test_llm.py` (5 tests, 31 pass in total) covers the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
+`llm.answer_from_context` replaced by `monkeypatch` fakes: below the floor refuses with zero model calls, a cited answer passes with only cited ids in `sources` and a labelled context,
+the model's refusal sentence is refused, a citation to an unretrieved id is refused, and an uncited sentence is flagged not refused.
 `conftest.py` sets placeholder API keys (always overriding any real key, so a stray provider call
 fails instead of spending money) and restores `CLIENTS` and `PORTFOLIOS` between tests. Not written: document integrity,
-filters, summary, refusal, advice refusal, grounding checks, agent loop, error mapping and structured
-analysis tests. No test uses a mock. `test_llm.py` is an empty file. No current test calls Claude,
-Voyage or Chroma.
+filters, summary, advice refusal, direct unit tests of `grounding.py` (including trailing-citation handling), agent loop, error mapping (the 429/504/502 mapping in `/insights/ask` is untested) and structured
+analysis tests. No test calls Claude, Voyage or Chroma.
 
 Mocking approach: replace the client's `create` method and the embedding function with fakes using
 `monkeypatch`. For the iteration limit test, make the fake model return a tool request every time,
@@ -873,7 +903,7 @@ You should be able to explain what every button does end to end, including exact
 to Voyage, Chroma and Claude.
 
 **Status: not started.** There is no README in either project, no design note,
-and the demo needs `/knowledge/ask` and the agent, which do not exist.
+and the demo needs the agent, which does not exist (the grounded-answer endpoint now exists as `/insights/ask`).
 
 ---
 
@@ -884,8 +914,8 @@ and the demo needs `/knowledge/ask` and the agent, which do not exist.
 | 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass | Done, except the document integrity test (section 11) |
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
 | 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested. No whole-portfolio check yet |
-| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Barely started: client and system prompt, plus an unfinished `/insights/client-fit` stub (mandate step only) |
-| 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing and search only |
+| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Barely started: client, grounded system prompt and `answer_from_context`. No summary, streaming or `/insights/client-fit` |
+| 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. Floor scores not recorded, no advice check |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Not started |
 | 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API | Not started |
 | 8 | Hardening, READMEs, design note, demo rehearsal | fresh checkout runs from the README | Not started |
