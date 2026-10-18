@@ -98,7 +98,7 @@ records.py (FUNDS, CLIENTS, PORTFOLIOS)
     -> routers (CRUD, filters, read-only funds)        structured lookups
     -> mandate.py (section 8), checked by the tests     compliance facts
     -> llm.py (summary, streaming, client-fit)         record fields go into the prompt
-    -> agent tools: get_fund, check_mandate
+    -> agent tool: check_mandate
 
 docs.py (DOCUMENTS)
     -> knowledge_store.index: embed with Voyage (document type), upsert into Chroma
@@ -741,10 +741,9 @@ nothing uses `AGENT_MAX_ITERATIONS` (defined in `config.py`), and the UI folder 
 |---|---|---|
 | `search_knowledge_base` | `query` | semantic search, returns top passages with ids and scores |
 | `check_mandate` | `client_id`, and `fund_id` or `portfolio_id` | applies the mandate rules from section 8 to real records (build on `mandate.check_fund` and `look_through_exposure`; there is no whole-portfolio check yet) |
-| optional `get_fund` | `fund_id` | returns a fund's structured facts |
 
 Data sources: `search_knowledge_base` reads the document stream (`docs.py` via Chroma). `check_mandate`
-and `get_fund` read the record stream (`records.py`). The agent needs both for a question like "does
+reads the record stream (`records.py`). There is deliberately no `get_fund` tool: the `GET /funds/{id}` endpoint already returns a fund's facts with no model cost. The agent needs both for a question like "does
 fund X breach client Y's exclusion, and what does our policy say?", and its system prompt must tell
 it to take exact numbers from the record tools and policy wording from the search tool.
 

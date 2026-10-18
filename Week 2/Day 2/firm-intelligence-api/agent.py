@@ -6,8 +6,8 @@ from llm import MODEL, client
 
 # agent system prompt
 AGENT_SYSTEM_PROMPT = (
-    "You are legal makrte analyst with access to tools to a search tool over a firm "
-    "intelligence knowledge base. Use the tool whenevr a question needs "
+    "You are legal market analyst with access to tools to a search tool over a firm "
+    "intelligence knowledge base. Use the tool whenever a question needs "
     "information you don't already have - do not guess. Cite document ids in  "
     "your final answer. If the tool returns nothing relevant, say so honestly."
 )
@@ -115,7 +115,7 @@ def execute_tool(name: str, tool_input: dict) -> tuple[str, bool]:
         result = knowledge.search(tool_input["query"], top_k=3)
     except RuntimeError as e:
         return f"Error: {e}", True
-    # same RutimeError that knowledge.search has always raised
+    # same RuntimeError that knowledge.search has always raised
     # it gets caught here instead of letting it crash the whole agent loop
 
     if not result:
