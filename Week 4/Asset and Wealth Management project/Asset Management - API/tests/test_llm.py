@@ -1,4 +1,6 @@
+import httpx
 import pytest
+from anthropic import APIStatusError, APITimeoutError, RateLimitError
 from fastapi.testclient import TestClient
 import config
 from main import app
@@ -6,6 +8,7 @@ from AI_Layer import grounding, llm
 import Data.knowledge_store as knowledge
 
 client = TestClient(app)
+REQ = httpx.Request("POST", "https://x")
 
 
 def passage(doc_id="doc-10", score=0.7):
@@ -63,3 +66,16 @@ def test_uncited_sentence_is_flagged_not_refused(model):
     model([passage()], "The fund holds 4.2% in Technology [doc-10]. It also did very well overall.")
     body = ask().json()
     assert body["refused"] is False and body["grounding"]["passed"] is False
+
+
+@pytest.mark.parametrize("error,status", [
+    (RateLimitError("x", response=httpx.Response(429, request=REQ), body=None), 429),
+    (APITimeoutError(request=REQ), 504),
+    (APIStatusError("x", response=httpx.Response(500, request=REQ), body=None), 502),
+])
+def test_ask_maps_provider_errors(monkeypatch, error, status):
+    monkeypatch.setattr(knowledge, "search", lambda question, top_k: [passage()])
+    def boom(q, ctx):
+        raise error
+    monkeypatch.setattr(llm, "answer_from_context", boom)
+    assert ask().status_code == status

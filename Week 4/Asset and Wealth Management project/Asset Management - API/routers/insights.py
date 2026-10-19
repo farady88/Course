@@ -1,11 +1,37 @@
 from fastapi import APIRouter, HTTPException
-from anthropic import APIStatusError, APITimeoutError, RateLimitError
+from pydantic import BaseModel
 import config
+import mandate
 import Data.knowledge_store as knowledge
 from AI_Layer import grounding, llm
+from routers.clients import get_client_or_404
+from routers.errors import provider_errors
+from routers.funds import get_fund_or_404
 from routers.knowledge import Question
 
 router = APIRouter(prefix="/insights", tags=["Insights"])
+
+
+class ClientFitRequest(BaseModel):
+    fund_id: int
+    client_id: int
+
+
+# Plain def: the Anthropic client blocks.
+@router.post("/client-fit")
+def client_fit(req: ClientFitRequest):
+    """Mandate rules first (exact breaches, computed by code), then Claude's typed assessment of them."""
+    fund = get_fund_or_404(req.fund_id)
+    client = get_client_or_404(req.client_id)
+    breaches = mandate.check_fund(client, fund)
+
+    try:
+        with provider_errors():
+            result = llm.assess_fit(client, fund, breaches)
+    except llm.InvalidAssessment:
+        raise HTTPException(status_code=502, detail="Model returned an invalid assessment")
+
+    return {"fund_id": req.fund_id, "client_id": req.client_id, "breaches": breaches, **result}
 
 
 def refusal(reason: str, **extra) -> dict:
@@ -28,14 +54,8 @@ def ask(q: Question):
     if not passages:
         return refusal("No relevant document found.")
 
-    try:
+    with provider_errors():
         result = llm.answer_from_context(q.question, build_context(passages))
-    except RateLimitError:
-        raise HTTPException(status_code=429, detail="Model provider rate limit reached, try again shortly")
-    except APITimeoutError:
-        raise HTTPException(status_code=504, detail="Model provider timed out")
-    except APIStatusError as e:
-        raise HTTPException(status_code=502, detail=f"Model provider error ({e.status_code})")
 
     tokens = {k: result[k] for k in ("input_tokens", "output_tokens", "stop_reason")}
     check = grounding.check_citations(result["answer"], [p["id"] for p in passages])

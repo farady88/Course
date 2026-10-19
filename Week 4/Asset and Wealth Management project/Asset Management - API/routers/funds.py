@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
+from AI_Layer import llm
 from Data.records import FUNDS
+from routers.errors import provider_errors
 
 router = APIRouter(prefix="/funds", tags=["Funds"])
 
@@ -22,3 +24,11 @@ def list_funds():
 def get_fund(fund: dict = Depends(get_fund_or_404)):
     #Returns fund information of valid fund_id.
     return fund
+
+
+# Plain def, not async: the Anthropic client blocks and would stall the event loop.
+@router.get("/{fund_id}/summary")
+def summarise(fund: dict = Depends(get_fund_or_404)):
+    #Plain summary of the fund from its record, with token counts.
+    with provider_errors():
+        return llm.summarise_fund(fund)
