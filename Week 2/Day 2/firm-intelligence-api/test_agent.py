@@ -32,7 +32,7 @@ class FakeResponse:
         self.content, self.stop_reason, self.usage = content, stop_reason, usage
 
 
-def test_agent_stops_at_max_interations_instead_of_looping_forever(monkeypatch):
+def test_agent_stops_at_max_iterations_instead_of_looping_forever(monkeypatch):
     def fake_create(**kwargs):
         return FakeResponse(
             [FakeToolUseBlock({"query": "anything"})], "tool_use", FakeUsage(100, 15)

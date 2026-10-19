@@ -115,7 +115,7 @@ def execute_tool(name: str, tool_input: dict) -> tuple[str, bool]:
         result = knowledge.search(tool_input["query"], top_k=3)
     except RuntimeError as e:
         return f"Error: {e}", True
-    # same RutimeError that knowledge.search has always raised
+    # same RuntimeError that knowledge.search has always raised
     # it gets caught here instead of letting it crash the whole agent loop
 
     if not result:

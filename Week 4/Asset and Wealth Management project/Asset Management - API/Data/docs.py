@@ -17,10 +17,9 @@ DOCUMENTS = {
         "fund_id": 1,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN GLOBAL EQUITY GROWTH
+        "body": ("""MERIDIAN GLOBAL EQUITY GROWTH
 INVESTMENT MANDATE AND PHILOSOPHY
 Effective 1 January 2024 | Information as of 31 December 2024
 
@@ -69,7 +68,7 @@ mean that the portfolio must replicate the benchmark's holdings.
 ## Important limitation
 The structured fund record contains the reported top holdings only. The
 reported holdings therefore must not be treated as the fund's complete
-portfolio or complete sector allocation."""
+portfolio or complete sector allocation.""")
     },
 
     2: {
@@ -82,10 +81,9 @@ portfolio or complete sector allocation."""
         "fund_id": 2,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN EMERGING MARKETS EQUITY
+        "body": ("""MERIDIAN EMERGING MARKETS EQUITY
 INVESTMENT MANDATE AND RISK PROFILE
 Effective 1 January 2024 | Information as of 31 December 2024
 
@@ -130,7 +128,7 @@ for a particular client.
 ## Important limitation
 The structured record contains top reported holdings rather than the complete
 portfolio. Absence of a sector from the reported list does not establish zero
-total exposure."""
+total exposure.""")
     },
 
     3: {
@@ -143,10 +141,9 @@ total exposure."""
         "fund_id": 3,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN SUSTAINABLE GLOBAL EQUITY
+        "body": ("""MERIDIAN SUSTAINABLE GLOBAL EQUITY
 INVESTMENT AND SUSTAINABILITY FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
@@ -179,7 +176,7 @@ against a client mandate must be determined by the mandate rules.
 
 ## Benchmark
 The fund reports against the Meridian Sustainable Global Equity Reference Index,
-a global equity comparison benchmark incorporating sustainability constraints."""
+a global equity comparison benchmark incorporating sustainability constraints.""")
     },
 
     4: {
@@ -192,10 +189,9 @@ a global equity comparison benchmark incorporating sustainability constraints.""
         "fund_id": 4,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN GLOBAL GOVERNMENT AND CORPORATE BOND
+        "body": ("""MERIDIAN GLOBAL GOVERNMENT AND CORPORATE BOND
 FIXED INCOME INVESTMENT FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
@@ -232,7 +228,7 @@ benchmark.
 
 ## Important limitation
 The listed securities are reported top positions and do not constitute a
-complete maturity, duration, credit-quality or issuer breakdown."""
+complete maturity, duration, credit-quality or issuer breakdown.""")
     },
 
     5: {
@@ -245,10 +241,9 @@ complete maturity, duration, credit-quality or issuer breakdown."""
         "fund_id": 5,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN BALANCED MULTI-ASSET
+        "body": ("""MERIDIAN BALANCED MULTI-ASSET
 STRATEGIC ALLOCATION FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
@@ -276,7 +271,7 @@ only a value above the limit is a breach.
 
 ## Benchmark
 The fund reports against the Meridian Balanced Multi-Asset Reference
-Benchmark, a strategic multi-asset comparison benchmark."""
+Benchmark, a strategic multi-asset comparison benchmark.""")
     },
 
     6: {
@@ -289,10 +284,9 @@ Benchmark, a strategic multi-asset comparison benchmark."""
         "fund_id": 6,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN ACTIVE THEMATIC EQUITY
+        "body": ("""MERIDIAN ACTIVE THEMATIC EQUITY
 THEMATIC INVESTMENT FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
@@ -323,7 +317,7 @@ The fund has a comparatively high ongoing charge in the structured records.
 Exact fee compliance is a deterministic check, not an LLM judgement.
 
 ## Benchmark
-The fund reports against the Meridian Active Thematic Equity Reference Index."""
+The fund reports against the Meridian Active Thematic Equity Reference Index.""")
     },
 
     7: {
@@ -336,10 +330,9 @@ The fund reports against the Meridian Active Thematic Equity Reference Index."""
         "fund_id": 7,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN FRONTIER MARKETS
+        "body": ("""MERIDIAN FRONTIER MARKETS
 FRONTIER MARKETS RISK FRAMEWORK
 Effective 1 January 2024 | Information as of 31 December 2024
 
@@ -373,7 +366,7 @@ The fund reports against the Meridian Frontier Markets Reference Index.
 ## Important limitation
 The listed holdings are not the complete portfolio. Do not infer zero
 exposure to a sector merely because that sector is absent from the listed
-positions."""
+positions.""")
     },
 
     # -----------------------------------------------------------------------
@@ -389,10 +382,9 @@ positions."""
         "fund_id": 1,
         "client_id": None,
         "status": "historical",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN GLOBAL EQUITY GROWTH FUND
+        "body": ("""MERIDIAN GLOBAL EQUITY GROWTH FUND
 QUARTERLY MANAGER COMMENTARY - Q1 2024
 As of 31 March 2024
 
@@ -419,7 +411,7 @@ companies.
 ## Interpretation rule
 These statements describe the manager's view at the date of the commentary.
 They are historical commentary and must not be presented as a current
-forecast or guarantee of future performance."""
+forecast or guarantee of future performance.""")
     },
 
     9: {
@@ -432,10 +424,9 @@ forecast or guarantee of future performance."""
         "fund_id": 2,
         "client_id": None,
         "status": "historical",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN EMERGING MARKETS EQUITY FUND
+        "body": ("""MERIDIAN EMERGING MARKETS EQUITY FUND
 QUARTERLY MANAGER COMMENTARY - Q3 2023
 As of 30 September 2023
 
@@ -463,7 +454,7 @@ current ESG/exclusions policy when assessing a mandate.
 
 ## Historical-use warning
 This document explains the manager's Q3 2023 view. It is not evidence that
-the same exposures or market conditions still apply at a later date."""
+the same exposures or market conditions still apply at a later date.""")
     },
 
     # -----------------------------------------------------------------------
@@ -479,10 +470,9 @@ the same exposures or market conditions still apply at a later date."""
         "fund_id": None,
         "client_id": 1,
         "status": "active",
-        "version": "1.0",
         "authority": "client_mandate",
         "scope": "client",
-        "text": """INVESTMENT MANAGEMENT AGREEMENT
+        "body": ("""INVESTMENT MANAGEMENT AGREEMENT
 HARRINGTON FAMILY TRUST - CLIENT ID 1
 Effective 15 June 2020
 
@@ -513,7 +503,7 @@ review.
 The restrictions above are client-specific. They are not merely descriptions
 of the client's preferences. Where the mandate rules check a fund or
 portfolio against Client 1, these restrictions are the applicable client
-limits."""
+limits.""")
     },
 
     11: {
@@ -526,10 +516,9 @@ limits."""
         "fund_id": None,
         "client_id": 2,
         "status": "active",
-        "version": "1.0",
         "authority": "client_mandate",
         "scope": "client",
-        "text": """OAKRIDGE PENSION SCHEME
+        "body": ("""OAKRIDGE PENSION SCHEME
 CLIENT MANDATE SUMMARY - CLIENT ID 2
 Effective 5 January 2024
 
@@ -550,7 +539,7 @@ client record does not impose an additional ESG threshold. Firm-wide policy
 and other applicable restrictions remain relevant.
 
 The maximum holding and fee limits are hard screening parameters. Equality
-with a limit is not a breach; a value above the limit is a breach."""
+with a limit is not a breach; a value above the limit is a breach.""")
     },
 
     12: {
@@ -563,10 +552,9 @@ with a limit is not a breach; a value above the limit is a breach."""
         "fund_id": None,
         "client_id": 3,
         "status": "active",
-        "version": "1.0",
         "authority": "client_mandate",
         "scope": "client",
-        "text": """WHITMORE FOUNDATION
+        "body": ("""WHITMORE FOUNDATION
 CLIENT MANDATE SUMMARY - CLIENT ID 3
 Effective 8 January 2024
 
@@ -588,7 +576,7 @@ from any excluded sector requires deterministic screening before a compliance
 conclusion is made.
 
 The mandate's ethical restrictions are stricter than the firm's baseline
-policy where applicable."""
+policy where applicable.""")
     },
 
     13: {
@@ -601,10 +589,9 @@ policy where applicable."""
         "fund_id": None,
         "client_id": 4,
         "status": "active",
-        "version": "1.0",
         "authority": "client_mandate",
         "scope": "client",
-        "text": """CASTELLAN GROWTH PARTNERS
+        "body": ("""CASTELLAN GROWTH PARTNERS
 CLIENT MANDATE SUMMARY - CLIENT ID 4
 Effective 10 January 2024
 
@@ -624,7 +611,7 @@ investment analysis. It means that this client record does not impose a
 deterministic maximum fee rule.
 
 The gambling exclusion remains a hard client restriction and must be checked
-by the mandate rules."""
+by the mandate rules.""")
     },
 
     14: {
@@ -637,10 +624,9 @@ by the mandate rules."""
         "fund_id": None,
         "client_id": 5,
         "status": "active",
-        "version": "1.0",
         "authority": "client_mandate",
         "scope": "client",
-        "text": """DR INGRID LINDQVIST
+        "body": ("""DR INGRID LINDQVIST
 CLIENT MANDATE SUMMARY - CLIENT ID 5
 Effective 12 January 2024
 
@@ -659,7 +645,7 @@ client specifically excludes tobacco for personal reasons.
 The mandate is deliberately configured so that Meridian Balanced Multi-Asset
 sits exactly at several limits: risk rating 4, ongoing charge 1.10% and a
 reported 5.0% top holding. The screening convention is that a value equal to
-a maximum is permitted; only a value above the maximum breaches it."""
+a maximum is permitted; only a value above the maximum breaches it.""")
     },
 
     # -----------------------------------------------------------------------
@@ -675,10 +661,9 @@ a maximum is permitted; only a value above the maximum breaches it."""
         "fund_id": None,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "firm_policy",
         "scope": "firm",
-        "text": """MERIDIAN ASSET MANAGEMENT
+        "body": ("""MERIDIAN ASSET MANAGEMENT
 ESG AND EXCLUSIONS POLICY
 Effective 10 January 2023
 
@@ -712,7 +697,7 @@ The client's mandate must therefore be considered alongside this policy.
 ## Important distinction
 This policy defines the firm's framework. It does not calculate whether an
 individual fund or portfolio breaches a client mandate. That determination is
-performed by the deterministic mandate rules using structured records."""
+performed by the deterministic mandate rules using structured records.""")
     },
 
     16: {
@@ -725,10 +710,9 @@ performed by the deterministic mandate rules using structured records."""
         "fund_id": None,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "firm_policy",
         "scope": "firm",
-        "text": """MERIDIAN ASSET MANAGEMENT
+        "body": ("""MERIDIAN ASSET MANAGEMENT
 SUITABILITY RULES AND PRODUCT RISK METHODOLOGY
 Effective 2 January 2024
 
@@ -770,7 +754,7 @@ screening calculation.
 A fund passing these mechanical checks is not automatically suitable in every
 respect. A suitability assessment may require financial circumstances,
 capacity for loss, time horizon, knowledge and experience and other information
-outside this synthetic dataset."""
+outside this synthetic dataset.""")
     },
 
     17: {
@@ -783,10 +767,9 @@ outside this synthetic dataset."""
         "fund_id": None,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "firm_policy",
         "scope": "firm",
-        "text": """MERIDIAN ASSET MANAGEMENT
+        "body": ("""MERIDIAN ASSET MANAGEMENT
 INVESTMENT RESTRICTION HIERARCHY
 Effective 3 January 2024
 
@@ -824,7 +807,7 @@ historical interpretation.
 ## LLM rule
 The LLM must state when the retrieved evidence is insufficient to determine
 which restriction applies. It must not invent a hierarchy or infer an
-exception that is not documented."""
+exception that is not documented.""")
     },
 
     18: {
@@ -837,10 +820,9 @@ exception that is not documented."""
         "fund_id": None,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "investment_operations",
         "scope": "firm",
-        "text": """MERIDIAN ASSET MANAGEMENT
+        "body": ("""MERIDIAN ASSET MANAGEMENT
 FUND RISK AND EXPOSURE REPORTING METHODOLOGY
 Effective 4 January 2024
 
@@ -879,7 +861,7 @@ treated as a guaranteed future return.
 If the structured data does not provide a complete exposure, maturity,
 duration, credit-quality or geographic breakdown, the knowledge system must
 say that the requested figure is unavailable rather than infer it from the
-top holdings."""
+top holdings.""")
     },
 
     19: {
@@ -892,10 +874,9 @@ top holdings."""
         "fund_id": None,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "firm_policy",
         "scope": "firm",
-        "text": """MERIDIAN ASSET MANAGEMENT
+        "body": ("""MERIDIAN ASSET MANAGEMENT
 FEE AND CHARGES DISCLOSURE POLICY
 Effective 20 May 2023
 
@@ -925,7 +906,7 @@ changes.
 ## Important limitation
 This policy explains fee terminology and disclosure. It is not the
 authoritative source for the current numerical fee of an individual fund;
-the current structured fund record is used for deterministic screening."""
+the current structured fund record is used for deterministic screening.""")
     },
 
     20: {
@@ -938,10 +919,9 @@ the current structured fund record is used for deterministic screening."""
         "fund_id": None,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "investment_operations",
         "scope": "firm",
-        "text": """MERIDIAN KNOWLEDGE BASE
+        "body": ("""MERIDIAN KNOWLEDGE BASE
 DEFINITIONS AND DATA LIMITATIONS
 Effective 5 January 2024
 
@@ -987,7 +967,7 @@ an appropriate date caveat.
 ## Data limitation rule
 The absence of information is not evidence of zero exposure, zero risk or
 compliance. If the records and retrieved documents do not establish an
-answer, the knowledge system should say that the evidence is insufficient."""
+answer, the knowledge system should say that the evidence is insufficient.""")
     },
 
     # -----------------------------------------------------------------------
@@ -1003,10 +983,9 @@ answer, the knowledge system should say that the evidence is insufficient."""
         "fund_id": 1,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN GLOBAL EQUITY GROWTH
+        "body": ("""MERIDIAN GLOBAL EQUITY GROWTH
 2024 RISK AND POSITIONING REVIEW
 As of 31 December 2024
 
@@ -1033,7 +1012,7 @@ specific expected return or volatility figure.
 Performance should be discussed relative to the Meridian Global Equity Growth
 Reference Index where benchmark-relative data is available. The current
 knowledge base does not contain a complete numerical benchmark-return series,
-so the system must not invent one."""
+so the system must not invent one.""")
     },
 
     22: {
@@ -1046,10 +1025,9 @@ so the system must not invent one."""
         "fund_id": 2,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN EMERGING MARKETS EQUITY
+        "body": ("""MERIDIAN EMERGING MARKETS EQUITY
 2024 RISK AND POSITIONING REVIEW
 As of 31 December 2024
 
@@ -1071,7 +1049,7 @@ deterministic mandate rules rather than assessed by the language model.
 ## Historical context
 The Q3 2023 manager commentary provides historical explanations for
 commodity, currency and geopolitical weakness. It should not be treated as
-a current market forecast."""
+a current market forecast.""")
     },
 
     23: {
@@ -1084,10 +1062,9 @@ a current market forecast."""
         "fund_id": 4,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "investment_management",
         "scope": "fund",
-        "text": """MERIDIAN GLOBAL GOVERNMENT AND CORPORATE BOND
+        "body": ("""MERIDIAN GLOBAL GOVERNMENT AND CORPORATE BOND
 2024 FIXED INCOME RISK REPORT
 As of 31 December 2024
 
@@ -1113,7 +1090,7 @@ risk.
 ## Data limitation
 The knowledge base does not contain a complete maturity ladder, credit-rating
 distribution or currency breakdown. Those measures should not be inferred
-from the listed top holdings."""
+from the listed top holdings.""")
     },
 
     24: {
@@ -1126,10 +1103,9 @@ from the listed top holdings."""
         "fund_id": 6,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN ACTIVE THEMATIC EQUITY
+        "body": ("""MERIDIAN ACTIVE THEMATIC EQUITY
 2024 THEMATIC RISK REVIEW
 As of 31 December 2024
 
@@ -1151,7 +1127,7 @@ not be interpreted as an ESG score.
 ## Cost
 The fund has a 2.25% ongoing charge in the structured record. Whether that
 fee is acceptable depends on the client's mandate and the applicable
-screening rule."""
+screening rule.""")
     },
 
     25: {
@@ -1164,10 +1140,9 @@ screening rule."""
         "fund_id": 7,
         "client_id": None,
         "status": "active",
-        "version": "1.0",
         "authority": "fund_management",
         "scope": "fund",
-        "text": """MERIDIAN FRONTIER MARKETS
+        "body": ("""MERIDIAN FRONTIER MARKETS
 2024 FRONTIER MARKETS RISK REVIEW
 As of 31 December 2024
 
@@ -1189,10 +1164,9 @@ movements occurred should be answered as insufficiently supported.
 
 ## Screening
 The exact impact of the reported holdings, risk rating and ESG rating on a
-client mandate must be determined using the mandate rules."""
+client mandate must be determined using the mandate rules.""")
     },
 }
-
 
 # Convenience list for indexing code that prefers iteration over dict values.
 DOCUMENT_LIST = list(DOCUMENTS.values())

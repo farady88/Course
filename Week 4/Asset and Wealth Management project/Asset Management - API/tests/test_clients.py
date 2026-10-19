@@ -5,8 +5,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 #main.py (which contains the FastAPI app)
 #Data/records.py (which contains the CLIENTS data)
 from fastapi.testclient import TestClient
+import mandate
 from main import app
-from Data.records import CLIENTS
+from Data.records import CLIENTS, FUNDS
 
 client = TestClient(app)
 
@@ -232,31 +233,9 @@ def test_sector_validation():
     response = client.put("/clients/1", json=invalid_update_data)
     assert response.status_code == 422  # Validation error
 
-ESG_ORDER = {"A": 4, "B": 3, "C": 2, "D": 1}
-
-
 def breached_rules(client_id, fund_id):
-    """Apply the five mandate rules to API data and return the names of those breached.
-
-    A value equal to a limit is compliant, a rule set to None is skipped,
-    and an unrated fund fails any ESG minimum.
-    """
-    c = client.get(f"/clients/{client_id}").json()
-    fund = client.get(f"/funds/{fund_id}").json()
-    breaches = set()
-    if set(c["excluded_sectors"] or []) & {h["sector"] for h in fund["holdings"]}:
-        breaches.add("excluded_sector")
-    if fund["risk_rating"] > c["risk_tolerance"]:
-        breaches.add("risk")
-    if any(h["weight_pct"] > c["max_single_holding_pct"] for h in fund["holdings"]):
-        breaches.add("concentration")
-    if c["min_esg_rating"] is not None:
-        if ESG_ORDER.get(fund["esg_rating"], 0) < ESG_ORDER[c["min_esg_rating"]]:
-            breaches.add("esg")
-    if c["max_ongoing_charge_pct"] is not None:
-        if fund["ongoing_charge_pct"] > c["max_ongoing_charge_pct"]:
-            breaches.add("fee")
-    return breaches
+    "Names of the mandate rules (mandate.py) that this client/fund pair breaks."
+    return {b["rule"] for b in mandate.check_fund(CLIENTS[client_id], FUNDS[fund_id])}
 
 
 def test_clean_pairing():
