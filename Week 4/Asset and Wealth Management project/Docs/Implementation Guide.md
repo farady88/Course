@@ -17,10 +17,11 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | Documents (`Data/docs.py`) | Built | 25 documents, ids `doc-01` to `doc-25`, `DOCUMENT_LIST` |
 | `/health` | Built (minimal) | returns `{"status": "Ok"}`, no index information |
 | Funds (read-only), Clients, Portfolios | Built (partial) | list, get, create, update, delete as in 5.2. **No query filters** |
-| Error scheme (5.3) | Partial | 404, 400, 422 in the record routers. Every Claude-calling endpoint (`/insights/ask`, `/insights/client-fit`, `/agent/ask`, `/funds/{id}/summary`) maps provider errors to 429/504/502 through `routers/errors.provider_errors`. No handler for Voyage or Chroma failures, no 500 mapping |
+| Error scheme (5.3) | Partial | 404, 400, 422 in the record routers. Every Claude-calling endpoint (`/insights/ask`, `/insights/client-fit`, `/agent/ask`, `/funds/{id}/summary`, `/portfolios/{id}/summary`) maps provider errors to 429/504/502 through `routers/errors.provider_errors`. No handler for Voyage or Chroma failures, no 500 mapping |
 | Configuration (section 3) | Built | `config.py` reads environment variables; no `.env.example` (see section 3) |
-| LLM features (section 6) | Partial | `AI_Layer/llm.py` holds the Anthropic client, `MODEL`, `GROUNDED_SYSTEM_PROMPT`, `answer_from_context` (7.4), `summarise_fund` (6.2) and `assess_fit` with the `Breach` / `MandateFitAssessment` models (6.4). Not built: streaming (6.3), token estimate (6.5), `/insights/compare` (10.4). The 6.1 standing rules exist only in the agent prompt (no advice, no forecasts); the grounded, summary and client-fit prompts do not state them |
+| LLM features (section 6) | Partial | `AI_Layer/llm.py` holds the Anthropic client, `MODEL`, `GROUNDED_SYSTEM_PROMPT`, `answer_from_context` (7.4), `summarise_fund` (6.2), `summarise_portfolio` (6.2) and `assess_fit` with the `Breach` / `MandateFitAssessment` models (6.4). Not built: streaming (6.3), token estimate (6.5), `/insights/compare` (10.4). The 6.1 standing rules exist only in the agent prompt (no advice, no forecasts); the grounded, summary and client-fit prompts do not state them |
 | `GET /funds/{id}/summary` (6.2) | Built | In `routers/funds.py`. Fund record in the prompt, 404 before any model call, 429/504/502 mapped. Tested with a fake model only |
+| `GET /portfolios/{id}/summary` (6.2) | Built | In `routers/portfolio.py`. Portfolio record plus the records of the funds it holds in the prompt, 404 before any model call, 429/504/502 mapped. Tested with a fake model only |
 | `POST /insights/client-fit` (6.4) | Built | In `routers/insights.py`. Runs `mandate.check_fund`, then Claude via a forced tool call, validated, one retry then 502; a breach forces `fits = false`. Tested with a fake model only; never run against the real model |
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
 | `POST /insights/ask`, refusal (7.4) | Built (partial) | In `routers/insights.py`, registered in `main.py` (the spec calls this `/knowledge/ask`). Retrieve, relevance floor (refuses without calling Claude), labelled context, Claude, grounding check, provider errors mapped to 429/504/502. Not built: advice/forecast check, floor tuning, retry |
@@ -30,7 +31,7 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions. `check_fund` is served by `/insights/client-fit` and the agent's `check_mandate` tool |
 | Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check. The search tool's output omits each passage's as-of date and status |
 | Streamlit UI (section 10) | Not built | `Asset Management - UI/` does not exist yet |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py` (79 tests pass in total, run from `Asset Management - API/`; nothing tests the eval set); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_portfolio_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py` (87 tests pass in total, run from `Asset Management - API/`; nothing tests the eval set); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_fund_summary.py`, `test_portfolio_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -168,7 +169,7 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **pytest with mocking**
 - *What:* pytest runs the tests. Mocking swaps real services for fakes.
-- *Here:* Fake Claude and Voyage responses (via `monkeypatch`) keep tests free, fast and repeatable, and let us simulate a model that never stops. (`test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py` and `test_knowledge.py` use them.)
+- *Here:* Fake Claude and Voyage responses (via `monkeypatch`) keep tests free, fast and repeatable, and let us simulate a model that never stops. (`test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_client_fit.py` and `test_knowledge.py` use them.)
 
 ### API layout
 
@@ -188,7 +189,7 @@ Asset Management - API/
                           Delete it, or fix it, before anyone calls it
     knowledge_store.py    Chroma + Voyage: build_index, search, count. Opens the Chroma store at import
   AI_Layer/
-    llm.py                Anthropic client, MODEL, prompts, answer_from_context, summarise_fund, assess_fit, Breach, MandateFitAssessment
+    llm.py                Anthropic client, MODEL, prompts, answer_from_context, summarise_fund, summarise_portfolio, assess_fit, Breach, MandateFitAssessment
     agent.py              tool-use loop: ask_with_tools, execute_tool, the two tool schemas (section 9)
     grounding.py          pure citation checks (7.6)
   Chunking/               chunking experiments (7.7). Not used by the API. Run as `python -m Chunking.<module>` from this folder
@@ -200,7 +201,8 @@ Asset Management - API/
     eval_set.py           EVAL_SET (50 questions), EVAL_SET_SUMMARY, RESEARCH_SOURCES, answerable(), unanswerable() (7.7)
   routers/
     funds.py              also GET /funds/{id}/summary (6.2)
-    clients.py  portfolio.py  knowledge.py
+    portfolio.py          also GET /portfolios/{id}/summary (6.2)
+    clients.py  knowledge.py
     errors.py             provider_errors(): Anthropic errors to 429/504/502 (used by every router that calls Claude)
     agent.py              POST /agent/ask (section 9): runs ask_with_tools, maps provider errors
     insights.py           POST /insights/ask (7.4): retrieve, floor, context, Claude, grounding check; POST /insights/client-fit (6.4)
@@ -210,7 +212,8 @@ Asset Management - API/
     test_portfolio.py     portfolio CRUD and validation, seed portfolios, look-through exposure (calls mandate.look_through_exposure)
     test_llm.py           /insights/ask with retrieval and the model mocked (floor, citations, refusals)
     test_agent.py         agent loop with a fake model, both tools, safe execution, /agent/ask status mapping
-    test_summary.py       /funds/{id}/summary with a fake model: tokens, prompt caveats, 404, error mapping
+    test_fund_summary.py       /funds/{id}/summary with a fake model: tokens, prompt caveats, 404, error mapping
+    test_portfolio_summary.py  /portfolios/{id}/summary with a fake model: tokens, held funds and cash in the prompt, caveats, 404, error mapping
     test_client_fit.py    /insights/client-fit with a fake model: forced fits=false, retry, 502, 404, error mapping
     test_grounding.py     check_citations called directly: refusal, cited answer, uncited sentence, trailing citation
     test_knowledge.py     /knowledge/index and /knowledge/search with the store faked: count and tokens, 409 when the fake raises, top_k bound; 422 on a short question
@@ -405,6 +408,7 @@ For clients and portfolios, implement full CRUD operations. For funds, portfolio
 | POST | `/portfolios` | create, validated by Pydantic, returns 200 with the new record |
 | GET | `/portfolios` | list, with filters |
 | GET | `/portfolios/{id}` | one record, 404 if absent |
+| GET | `/portfolios/{id}/summary` | plain summary of the portfolio and its funds with token counts (6.2), 404 if absent |
 | PUT | `/portfolios/{id}` | update, 404 if absent |
 | DELETE | `/portfolios/{id}` | delete, returns 200 with the deleted record, 404 if absent |
 
@@ -452,7 +456,7 @@ Voyage or Chroma failures, and no 500.
 
 ## 6. LLM features
 
-**Status of section 6: partly built.** The summary (6.2) and client-fit (6.4) endpoints exist. There is no streaming (6.3) or token-estimate (6.5) endpoint. `AI_Layer/llm.py` contains
+**Status of section 6: partly built.** The fund and portfolio summary (6.2) and client-fit (6.4) endpoints exist. There is no streaming (6.3) or token-estimate (6.5) endpoint. `AI_Layer/llm.py` contains
 the Anthropic client, the model name, `GROUNDED_SYSTEM_PROMPT` (British English, client-friendly,
 use only the figures given, cite `[doc-NN]`, caveat dated or historical passages, use the exact refusal
 sentence, never invent facts) and `answer_from_context`, which serves the grounded answer in 7.4.
@@ -479,6 +483,10 @@ holdings are top positions only and that no benchmark returns are supplied, so n
 ```
 
 **Status: built** in `routers/funds.py` (`summarise`) and `llm.summarise_fund`. The fund record goes into the user message inside `<fund>` tags (dates as ISO strings). The system prompt is `SUMMARY_SYSTEM_PROMPT`: the grounded prompt plus the top-positions-only, no-benchmark-returns and NAV-trend caveats (it does not state the no-advice or no-forecast rule). `max_tokens` 400. An unknown id is a 404 with no model call; provider errors map to 429/504/502 through `routers/errors.provider_errors`. Plain `def`, not `async`.
+
+`GET /portfolios/{id}/summary` does the same for a portfolio and returns the same shape. The router joins the portfolio's positions to the matching `FUNDS` records (safe, because create and update reject unknown `fund_id`s). The portfolio record (with `cash_weight_pct` when present) goes into the user message inside `<portfolio>` tags and the held fund records inside `<funds>` tags (dates as ISO strings).
+
+**Status: built** in `routers/portfolio.py` (`summarise`) and `llm.summarise_portfolio`. The system prompt is `PORTFOLIO_SUMMARY_SYSTEM_PROMPT`: the grounded prompt plus the top-positions-only and no-benchmark-returns caveats, the rule that weights are % of the portfolio with any remainder cash, and an instruction not to calculate blended, weighted or look-through figures (no such numbers are supplied, so the model may only quote the given ones). Like the fund prompt it does not state the no-advice or no-forecast rule. `max_tokens` 600. An unknown id is a 404 with no model call; provider errors map to 429/504/502. Plain `def`, not `async`. Tested with a fake model only (`test_portfolio_summary.py`).
 
 ### 6.3 Streaming client update
 
@@ -1001,19 +1009,19 @@ or depend on the network in tests.
 | `test_portfolio.py` | CRUD, 404s, validation (unknown fund, total over 100, weight out of range); seed portfolios point at real funds and total 100 with cash; Portfolio 4's cash; look-through exposure maths (Portfolio 5 tobacco 0.45%), cash ignored, zero exposure |
 | Document integrity | every document's `fund_id` and `client_id` exist in the records; each document's string `id` is `doc-` plus its dict key zero-padded to two digits (key 1 gives `"doc-01"`), and ids are unique |
 | Filters | the required fund, client and portfolio filters (section 5.2) |
-| Summary | mocked Claude returns text and token counts are passed through (`test_summary.py`) |
+| Summary | mocked Claude returns text and token counts are passed through (`test_fund_summary.py`, `test_portfolio_summary.py`) |
 | Refusal rule | nothing above the floor gives `refused: true` **and the mocked LLM is called zero times** |
 | Advice refusal | "should I buy" is refused before retrieval |
 | Grounding checks | refusal passes; uncited sentence (3+ words) fails; citation to an unretrieved id is `invalid`; trailing citation stays with its sentence (section 7.6). All but `invalid` are in `test_grounding.py`; `invalid` is covered only through `/insights/ask` in `test_llm.py` |
 | Agent loop | normal completion; tool call then answer; unknown tool reported as error, not raised; missing argument; tool exception; **model that never stops** ends at `AGENT_MAX_ITERATIONS` with `completed: false` |
-| Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 (covered for `/agent/ask`, `/insights/ask`, `/insights/client-fit` and the summary) |
+| Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 (covered for `/agent/ask`, `/insights/ask`, `/insights/client-fit` and both summaries) |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` (`test_client_fit.py`) |
 
 **Status:** 79 tests, all passing (run `python -m pytest` from `Asset Management - API/`; the venv is at the project root). Per file: `test_funds.py` 4,
-`test_clients.py` 14, `test_portfolio.py` 8, `test_llm.py` 8, `test_agent.py` 15, `test_summary.py` 7, `test_client_fit.py` 12, `test_grounding.py` 4, `test_knowledge.py` 5, `test_chunking.py` 2.
+`test_clients.py` 14, `test_portfolio.py` 8, `test_llm.py` 8, `test_agent.py` 15, `test_fund_summary.py` 7, `test_portfolio_summary.py` 8, `test_client_fit.py` 12, `test_grounding.py` 4, `test_knowledge.py` 5, `test_chunking.py` 2.
 Nothing tests the eval set, the BM25 index, the chunk index or the context ordering (7.7).
 The first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
-`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 79 pass in total with the files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
+`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 87 pass in total with the files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
 `llm.answer_from_context` replaced by `monkeypatch` fakes: below the floor refuses with zero model calls, a cited answer passes with only cited ids in `sources` and a labelled context,
 the model's refusal sentence is refused, a citation to an unretrieved id is refused, and an uncited sentence is flagged not refused.
 `test_agent.py` fakes `agent.client.messages.create` and covers: a plain answer, a tool call then an answer (token totals summed), a model that never stops
@@ -1024,7 +1032,7 @@ fails instead of spending money) and restores `CLIENTS` and `PORTFOLIOS` between
 filters, advice refusal, a direct test of an `invalid` citation in `grounding.py`, a live-model run of summary and client-fit.
 `test_grounding.py` (4 tests) calls `check_citations` directly with no mocks: refusal, fully cited answer, uncited sentence flagged, trailing citation kept with its sentence.
 `test_knowledge.py` (5 tests) fakes `knowledge.search`, `build_index` and `count`: ranked hits, 409 when the faked search raises `RuntimeError` (the real search never does, so this proves the router mapping only, not the behaviour before indexing), `top_k` above 8 gives 422, `/knowledge/index` returns the count and token total, and a short question to `/insights/ask` gives 422. The ask endpoint itself is tested in `test_llm.py`.
-`test_summary.py` (7 tests) and `test_client_fit.py` (12 tests) fake `llm.client.messages.create`: tokens and prompt caveats, 404 with zero model calls, 429/504/502 mapping, a breach forcing `fits = false` and blocking `approve`, one retry on invalid output with summed tokens, 502 after two invalid outputs. No test calls Claude or Voyage, and none queries Chroma, but importing the app opens the on-disk store (see 7.2).
+`test_fund_summary.py` (7 tests), `test_portfolio_summary.py` (8 tests) and `test_client_fit.py` (12 tests) fake `llm.client.messages.create`: tokens and prompt caveats, 404 with zero model calls, 429/504/502 mapping, a breach forcing `fits = false` and blocking `approve`, one retry on invalid output with summed tokens, 502 after two invalid outputs. No test calls Claude or Voyage, and none queries Chroma, but importing the app opens the on-disk store (see 7.2).
 
 Mocking approach: replace the client's `create` method and the embedding function with fakes using
 `monkeypatch`. For the iteration limit test, make the fake model return a tool request every time,
@@ -1069,7 +1077,7 @@ and the demo needs a real-model run of the agent, which has not happened yet (th
 | 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass | Done, except the document integrity test (section 11) |
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
 | 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested, used by `/insights/client-fit` and the agent. No whole-portfolio endpoint or concentration rule (the agent checks a portfolio fund by fund) |
-| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Partial: summary and `/insights/client-fit` built and tested with a fake model, not yet against real Claude. Streaming update (6.3) not built |
+| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Partial: fund and portfolio summaries and `/insights/client-fit` built and tested with a fake model, not yet against real Claude. Streaming update (6.3) not built |
 | 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. The 50-question eval set (`Eval/eval_set.py`) and six chunking strategies (`Chunking/`) exist, but no runner scores them: floor scores not recorded, no chunking comparison, no advice check (7.7) |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Done against a fake model (`test_agent.py`). Not yet tried with the real model |
 | 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API | Not started |

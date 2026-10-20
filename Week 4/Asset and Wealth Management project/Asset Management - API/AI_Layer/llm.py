@@ -37,6 +37,16 @@ so never quote or invent benchmark-relative performance. Explain the NAV trend q
 its risk and what it costs.
 """
 
+PORTFOLIO_SUMMARY_SYSTEM_PROMPT = f"""
+You write plain, client-friendly summaries of a single portfolio for portfolio managers and advisers.
+{GROUNDED_SYSTEM_PROMPT}
+The portfolio lists its positions as fund weights (% of the portfolio); any remainder is cash.
+The funds it holds are given with their records. Their holdings are the top positions only, not the whole fund.
+No benchmark returns are supplied, so never quote or invent benchmark-relative performance.
+Do not calculate blended, weighted or look-through figures: quote only the numbers given.
+Cover what the portfolio holds, how it is spread across funds, what drives its risk and what it costs.
+"""
+
 ASSESSMENT_SYSTEM_PROMPT = f"""
 You assess whether a fund fits a client's mandate and record the result with the record_assessment tool.
 {GROUNDED_SYSTEM_PROMPT}
@@ -80,6 +90,27 @@ def summarise_fund(fund: dict) -> dict:
         messages = [{
             "role": "user",
             "content": f"<fund>\n{json.dumps(fund, default=str)}\n</fund>\n\nSummarise this fund.",
+        }],
+    )
+    return {
+        "summary": response.content[0].text,
+        "input_tokens": response.usage.input_tokens,
+        "output_tokens": response.usage.output_tokens,
+    }
+
+
+def summarise_portfolio(portfolio: dict, funds: list[dict]) -> dict:
+    """Plain-English summary of one portfolio and the fund records it holds, with token counts."""
+    response = client.messages.create(
+        model = MODEL,
+        max_tokens = 600,
+        system = PORTFOLIO_SUMMARY_SYSTEM_PROMPT,
+        messages = [{
+            "role": "user",
+            "content": (
+                f"<portfolio>\n{json.dumps(portfolio, default=str)}\n</portfolio>\n"
+                f"<funds>\n{json.dumps(funds, default=str)}\n</funds>\n\nSummarise this portfolio."
+            ),
         }],
     )
     return {

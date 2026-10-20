@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from AI_Layer import llm
 from Data.records import PORTFOLIOS, FUNDS
+from routers.errors import provider_errors
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
 
@@ -65,6 +67,15 @@ def list_portfolios():
 @router.get("/{portfolio_id}")
 def get_portfolio(portfolio: dict = Depends(get_portfolio_or_404)):
     return portfolio
+
+
+# Plain def, not async: the Anthropic client blocks and would stall the event loop.
+@router.get("/{portfolio_id}/summary")
+def summarise(portfolio: dict = Depends(get_portfolio_or_404)):
+    #Plain summary of the portfolio and the funds it holds, with token counts.
+    funds = [FUNDS[p["fund_id"]] for p in portfolio["positions"]]
+    with provider_errors():
+        return llm.summarise_portfolio(portfolio, funds)
 
 
 @router.post("")
