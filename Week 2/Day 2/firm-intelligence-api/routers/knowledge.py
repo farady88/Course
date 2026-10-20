@@ -1,20 +1,19 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from anthropic import APIStatusError, APITimeoutError, RateLimitError
-import grounding
-import llm
+
+import grounding, llm, context, gate, settings, hybrid
 import knowledge_store as knowledge
-import hybrid
 
 # Our relevance floor
 # Below we treat the retrieved context as not actually relevant
-RELEVANCE_FLOOR = 0.35
+RELEVANCE_FLOOR = 0.425
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
 # create your class (QUESTION) using base model
-#  w.2 field (question and top_k)
+# w.2 field (question and top_k)
 class Question (BaseModel):
     question: str = Field(min_length=3 )
     top_k: int = Field(default=3, gt=0, le=8)
@@ -25,8 +24,11 @@ class Question (BaseModel):
 def rebuild_index():
     """Embed the corpus. Costs tokens... so it is a deliberate POST 
     """
-    tokens = knowledge.build_index()
-    return {"indexed": knowledge.count(), "embedding_tokens": tokens}
+    try:
+        tokens = knowledge.build_index()
+    except RuntimeError as e:
+        raise HTTPException(status_code = 409, detail = str(e))
+    return {"indexed": knowledge.count() , "embedding_tokens": tokens}
 
 
 # Post because it carries json data 
@@ -62,7 +64,7 @@ def ask(q: Question):
 
     # 2. Filter, and decide whether to make a call to the model at all
     #compare against our RELEVANCE_FLOOR
-    usable = [hit for hit in hits if hybrid.is_usable(hit, RELEVANCE_FLOOR)]
+    usable = [hit for hit in hits if gate.is_usable(hit, RELEVANCE_FLOOR, settings.RERANK_FLOOR)]
 
     if not usable:
         return {

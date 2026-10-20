@@ -67,8 +67,8 @@ def index_definition(name: str) -> SearchIndex:
     semantic_search = SemanticSearch(configurations = [SemanticConfiguration(
                 name = settings.SEMANTIC_CONFIG,
                 prioritized_fields = SemanticPrioritizedFields(
-                    title_fields = SemanticField(filed_name = "title"),
-                    content_field = [SemanticField(field_name = "text")],
+                    title_field = SemanticField(field_name = "title"),
+                    content_fields = [SemanticField(field_name = "text")],
                 )
     )])
     return SearchIndex(name = name, fields = fields, vector_search = vector_search, semantic_search = semantic_search)

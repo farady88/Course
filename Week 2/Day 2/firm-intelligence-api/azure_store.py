@@ -43,12 +43,12 @@ def _endpoint() -> str:
 
 @lru_cache(maxsize = None)
 def search_client() -> SearchClient:
-    return SearchClient(endpoint = _endpoint(), index_name = settings.AZURE_SEARCH_INDEX, credentials = _credentials())
+    return SearchClient(endpoint = _endpoint(), index_name = settings.AZURE_SEARCH_INDEX, credential = _credentials())
 
 
 @lru_cache(maxsize = None)
 def index_client() -> SearchIndexClient:
-    return SearchIndexClient(endpoint = _endpoint(), credentials = _credentials())
+    return SearchIndexClient(endpoint = _endpoint(), credential = _credentials())
 
 
 def _identifiers(text: str) -> set[str]: 
@@ -61,7 +61,7 @@ def count() -> int:
         - Needs only the query permission."""
 
     try: 
-        return search_client().search(search_texts = "*", include_total_count = True, top = 0).get_count()
+        return search_client().search(search_text = "*", include_total_count = True, top = 0).get_count()
     except ResourceNotFoundError:
         return 0
 
@@ -79,7 +79,7 @@ def search_with_vector(question: str, query_vector: list [float], top_k: int = 3
 
     options = {
         "search_text": search_text, 
-        "vector_queries": [VectorizedQuery(vector = query_vector, k_nearest_neighbors = CANDIDATES, fields = "embeddings")],
+        "vector_queries": [VectorizedQuery(vector = query_vector, k_nearest_neighbors = CANDIDATES, fields = "embedding")],
         "select": ["chunk_id", "doc_id", "title", "text"],
         "top": max(top_k, CANDIDATES)
     }
@@ -102,7 +102,7 @@ def search_with_vector(question: str, query_vector: list [float], top_k: int = 3
     # Turn each result into a hit 
         # 2 scores: Reranker score (0 - 4), and the fused rank score from the merge
 
-    wanted = _identifiers(question) if settings.EXACT_MATCH_RULE else set ()
+    wanted = _identifiers(question) if settings.AZURE_SEARCH_RULE else set ()
     hits = []
     for result in results: 
         rerank = result.get ("@search.reranker_score")
@@ -116,7 +116,7 @@ def search_with_vector(question: str, query_vector: list [float], top_k: int = 3
             "score": rerank if rerank is not None else fused,
             "rerank_score": rerank, 
             "rrf": round(fused, 5),
-            "exact_match": bool(wanted & (set*bm25.tokenize(result["text"])))
+            "exact_match": bool(wanted & set(bm25.tokenize(result["text"])))
         })
     return hits
 
@@ -182,7 +182,7 @@ def build_index(strategy: str) -> int:
 
     for start in range(0, len(docs), BATCH):
         results = search_client().upload_documents(documents = docs[start:start + BATCH])
-        failed = [result for result in results if not results.succeeded]
+        failed = [result for result in results if not result.succeeded]
         if failed :
             raise RuntimeError(f"Azure rejected {len(failed)} chunks. First: {failed[0].key}: {failed[0].error_message}")
 
