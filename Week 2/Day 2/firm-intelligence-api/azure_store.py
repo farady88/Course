@@ -65,18 +65,127 @@ def count() -> int:
     except ResourceNotFoundError:
         return 0
 
+# Search with vector
 
-def search_with_vector(question: str, query_vector: list [float], top_k: int = 3, semantic: bool = True ) -> list[dict]
+def search_with_vector(question: str, query_vector: list [float], top_k: int = 3, semantic: bool = True ) -> list[dict]:
     # Clean the question 
         # What is "LP-3307"?
         # What is lp 3307?
+    
+    search_text = " ".join (bm25.tokenize(question)) or "*"
 
     # Build one query that will do 2 searches
         # Keyword half and vector half
 
+    options = {
+        "search_text": search_text, 
+        "vector_queries": [VectorizedQuery(vector = query_vector, k_nearest_neighbors = CANDIDATES, fields = "embeddings")],
+        "select": ["chunk_id", "doc_id", "title", "text"],
+        "top": max(top_k, CANDIDATES)
+    }
+    
     # Switch on the semantic reranker
+
+    if semantic: 
+        options["query_type"] = "semantic"
+        options["semantic_configuration_name"] = settings.SEMANTIC_CONFIG
 
     # Run it, trim it using top_k, and if needed handle any missing index
 
+    try:
+        results = list(search_client().search(**options))[ : top_k]
+    except ResourceNotFoundError as error:
+        raise RuntimeError(NOT_BUILT) from error 
+    if not results:
+        raise RuntimeError(NOT_BUILT)
+
     # Turn each result into a hit 
         # 2 scores: Reranker score (0 - 4), and the fused rank score from the merge
+
+    wanted = _identifiers(question) if settings.EXACT_MATCH_RULE else set ()
+    hits = []
+    for result in results: 
+        rerank = result.get ("@search.reranker_score")
+        fused = result ["@search.score"]
+
+        hits.append({
+            "id": result["doc_id"],
+            "chunk_id": result["chunk_id"],
+            "title": result["title"],
+            "text": result["text"],
+            "score": rerank if rerank is not None else fused,
+            "rerank_score": rerank, 
+            "rrf": round(fused, 5),
+            "exact_match": bool(wanted & (set*bm25.tokenize(result["text"])))
+        })
+    return hits
+
+
+# Get every chunk from its Voyage vector
+
+def _local_chunks(strategy: str) -> list[dict]:
+    """
+    Every chunk with its Voyage vector
+    Reusing costs no embedding tokens (also means Azure has the exact same chunks and vectors as the local search)
+    """
+    chunk_index.build(strategy) # free when up to date
+    # stored is a dict of parallel lists
+        # stored["ids"], stored["embeddings"]....
+    stored = chunk_index.collection_for(strategy).get(include = ["embeddings", "documents", "metadatas"])
+    # walk all 4 lists together
+    return [
+        {
+            "chunk_key": azure_index.key_for(chunk_id),
+            "chunk_id": chunk_id,
+            "doc_id": meta["doc_id"],
+            "title": meta["title"],
+            "text": text,
+            "embedding": [float(number) for number in vector],
+        }
+        for chunk_id, vector, text, meta in zip (stored["ids"], stored["embeddings"], stored["documents"], stored["metadatas"])
+    ]
+
+
+# Make new documents searchable
+
+def _wait_until_counted(expected: int, seconds: int = 30) -> None:
+    "New documents become searchable a moment after upload, so we wait for the count to catchup"
+
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if count() >= expected: 
+            return 
+        time.sleep(1)
+    raise RuntimeError(f"Uploaded {expected} chunks, but the index reports {count()} after {seconds} seconds")
+
+
+# Drop and recreate index
+
+def build_index(strategy: str) -> int: 
+    "Drop and recreate the Azure index, then load every chunk and then return the chunk count"
+    docs = _local_chunks(strategy)
+    keys = [doc["chunk_key"] for doc in docs]
+    if len (set(keys)) != len(keys):
+        # The ids of doc-1#01 and doc-1_01 would both become doc-1_01
+        raise RuntimeError("Two chunk ids turn into the same Azure key, so chunks would overwrite each other")
+    # Check the vector sizes
+    bad = [doc for doc in docs if len(doc["embedding"]) != azure_index.DIMENSIONS]
+    if bad:
+        raise RuntimeError(f"{bad[0]['chunk_id']} has {len (bad[0]['embedding'])} numbers per vector, but the index expects {azure_index.DIMENSIONS}. Did the embedding model change?")    
+
+    name = settings.AZURE_SEARCH_INDEX
+    try:
+        index_client().delete_index(name)
+    except ResourceNotFoundError:
+        pass
+    index_client().create_index(azure_index.index_definition(name))
+
+    for start in range(0, len(docs), BATCH):
+        results = search_client().upload_documents(documents = docs[start:start + BATCH])
+        failed = [result for result in results if not results.succeeded]
+        if failed :
+            raise RuntimeError(f"Azure rejected {len(failed)} chunks. First: {failed[0].key}: {failed[0].error_message}")
+
+    # Wait, then report
+    _wait_until_counted(len(docs))
+    return len(docs)
