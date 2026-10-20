@@ -25,10 +25,12 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
 | `POST /insights/ask`, refusal (7.4) | Built (partial) | In `routers/insights.py`, registered in `main.py` (the spec calls this `/knowledge/ask`). Retrieve, relevance floor (refuses without calling Claude), labelled context, Claude, grounding check, provider errors mapped to 429/504/502. Not built: advice/forecast check, floor tuning, retry |
 | Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` is now wired into `/insights/ask` and acted on (see 7.6). Direct tests of `check_citations` in `test_grounding.py`, plus the endpoint tests. Regex fixed to match ids of any length |
+| Evaluation set (7.7) | Built (data only) | `Eval/eval_set.py`: 50 questions (40 answerable with expected `doc_id`, evidence and keywords; 10 that must be refused). No runner, no scoring, no recorded results, so the floor and the chunking choice are still unmeasured |
+| Chunking experiments (7.7) | Built, not wired in | `Chunking/`: six strategies, one Chroma collection per strategy, BM25, context ordering. Nothing in the API calls it, no strategy collection has been built, and no comparison has been run. The production index still embeds whole documents |
 | Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions. `check_fund` is served by `/insights/client-fit` and the agent's `check_mandate` tool |
 | Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check. The search tool's output omits each passage's as-of date and status |
 | Streamlit UI (section 10) | Not built | `Asset Management - UI/` does not exist yet |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py` (77 tests pass in total, run from `Asset Management - API/`); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py` (79 tests pass in total, run from `Asset Management - API/`; nothing tests the eval set); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -189,6 +191,13 @@ Asset Management - API/
     llm.py                Anthropic client, MODEL, prompts, answer_from_context, summarise_fund, assess_fit, Breach, MandateFitAssessment
     agent.py              tool-use loop: ask_with_tools, execute_tool, the two tool schemas (section 9)
     grounding.py          pure citation checks (7.6)
+  Chunking/               chunking experiments (7.7). Not used by the API. Run as `python -m Chunking.<module>` from this folder
+    chunking.py           six strategies and `chunk_corpus`
+    chunk_index.py        one Chroma collection per strategy: build, search_with_vectors, cosine_for
+    bm25.py               hand-written BM25 keyword index over the same chunks
+    context.py            order_for_context (U-shape) and build_context for chunk hits
+  Eval/
+    eval_set.py           EVAL_SET (50 questions), EVAL_SET_SUMMARY, RESEARCH_SOURCES, answerable(), unanswerable() (7.7)
   routers/
     funds.py              also GET /funds/{id}/summary (6.2)
     clients.py  portfolio.py  knowledge.py
@@ -205,6 +214,7 @@ Asset Management - API/
     test_client_fit.py    /insights/client-fit with a fake model: forced fits=false, retry, 502, 404, error mapping
     test_grounding.py     check_citations called directly: refusal, cited answer, uncited sentence, trailing citation
     test_knowledge.py     /knowledge/index and /knowledge/search with the store faked: count and tokens, 409 when the fake raises, top_k bound; 422 on a short question
+    test_chunking.py      every strategy on the real corpus, offline: unique non-empty chunks, no text lost, title-only prefix before the first heading
     conftest.py           sets placeholder API keys, restores CLIENTS and PORTFOLIOS after every test
   chroma_store/           the persistent index (CHROMA_PATH, 25 documents indexed). Committed to git
 requirements.txt          at the project root, not inside the API folder (so is the .venv)
@@ -603,14 +613,18 @@ this); and the response is `{"indexed": count(), "embedding_tokens": n}`, where 
 collection is `Asset_Management_docs` with cosine space, at `./chroma_store`, relative to the working
 directory (see section 3). The committed store in `Asset Management - API/chroma_store` holds all 25
 documents. Importing `knowledge_store` opens the store, so merely running the tests from that
-folder rewrites its `chroma.sqlite3` and shows up as a git change. `DOCUMENT_LIST` is defined but
-nothing uses it: indexing reads `DOCUMENTS.values()`.
+folder rewrites its `chroma.sqlite3` and shows up as a git change. `DOCUMENT_LIST` is not used by
+the indexing here (it reads `DOCUMENTS.values()`); only `Chunking/chunk_index.py` uses it.
 
 Chunking decision: documents of one to two pages can be embedded whole, which keeps context
 intact. The longest current document (`doc-01`) is about 310 words, so **none of the 25 reaches the
 roughly 500-word threshold and all are embedded whole**. If a longer document is added, split it
 into chunks and store the source document id in metadata so citations still point at the whole
 document. Record your decision and reasoning in the design note.
+
+**Status:** this is still the decision in force. Six alternatives are implemented in `Chunking/` and an
+eval set exists to compare them (7.7), but the comparison has not been run, so whole-document
+embedding is the default and not yet a measured choice.
 
 ### 7.3 Search only
 
@@ -643,6 +657,9 @@ with whitespace collapsed (not a snippet), and `score`. An empty index does not 
 unrelated, some borderline, some asking for personal advice). Record the score of the best result
 for each. Pick the floor that separates them and write down what happened at other values. Too
 low: unrelated questions get a confident answer. Too high: legitimate questions are refused.
+The questions now exist as `Eval/eval_set.py` (7.7): 40 answerable and 10 that must be refused. They are
+not yet scored, so the 0.425 floor is still unmeasured. Note the set has no questions labelled borderline,
+and none asking for personal advice ("should I buy").
 
 **Additional refusal rule:** questions asking for personal recommendations ("should I buy...?") or
 return forecasts are refused regardless of score, using a simple classifier check (a cheap
@@ -716,6 +733,86 @@ ignores sentences under three words. `llm.py` imports the module
    trailing-citation test has a live `print` and a commented-out `cited` assertion, and `SOURCES` is never used.
    An `invalid` citation is covered only through the endpoint (`test_llm.py`). Still to add: a direct `invalid` test,
    `[doc-1]`, and `is_refusal(None)`.
+
+### 7.7 Evaluation set and chunking experiments
+
+**Status: built as data and tooling, never run.** Two folders under `Asset Management - API/` exist to answer
+two open questions: where the relevance floor should sit (7.4) and whether chunking beats whole-document
+embedding (7.2). Neither question has an answer yet, because nothing scores the set against any index.
+
+**Evaluation set** (`Eval/eval_set.py`). `EVAL_SET` is a list of 50 dicts, `q01` to `q50`, each with `id`,
+`question`, `doc_id`, `evidence`, `keywords` and `kind`. The module also holds `EVAL_SET_SUMMARY` (counts;
+its `source_document_count` is hard-coded to 25), `RESEARCH_SOURCES` (the 7 external articles that
+inspired the question themes; the expected answers come from `docs.py` only), and two helpers,
+`answerable()` (items whose `doc_id` is set) and `unanswerable()`.
+
+| Kind | Count | Notes |
+|---|---|---|
+| `lookup` | 9 | |
+| `numeric` | 9 | |
+| `negation` | 8 | "does X require...", "is Y a breach" |
+| `multi-hop` | 6 | each still names a single `doc_id` |
+| `definition` | 3 | |
+| `policy` | 2 | |
+| `title-dependent` | 2 | the answer depends on knowing which fund or client a passage is about |
+| `causal` | 1 | |
+| `unanswerable` | 10 | `q41` to `q50`: `doc_id`, `evidence` and `keywords` are empty or `None`. The right outcome is a refusal or an "insufficient evidence" answer |
+
+Conventions a runner must follow:
+
+- `doc_id` is the zero-padded string id (`"doc-01"`) and always exists in `DOCUMENTS`. It matches the `doc_id`
+  metadata of a chunk, so a chunk hit can be scored against it. It is a single id, so no question rewards
+  retrieving two documents.
+- `evidence` is a sentence copied from that document. A `keywords` entry may list alternatives with `|`
+  (`"no|not"`). Match them on whitespace-normalised, case-folded text: the documents are hard-wrapped, so
+  plain substring matching misses phrases such as "digital payments" that wrap across a line. Even then
+  three keywords (`q21` "not a rating", `q29` "no|do not", `q37` "not descriptive prose") are words the
+  *answer* should use, not text in the document, so they test the generated answer and cannot be used to
+  test retrieval.
+- Coverage: 22 of the 25 documents have at least one question. `doc-20`, `doc-21` and `doc-22` have none.
+  The set covers documents only: no question needs a record, a mandate rule or the agent's tools, so the
+  combined demo question (section 12) is not represented.
+- The ten refusals are all "the knowledge base does not say" questions, and only `q48` asks for a forecast.
+  None asks for personal advice, so the advice and forecast refusal (7.4, not built) has no eval cases.
+
+**Chunking experiments** (`Chunking/`). Not imported by the API, the agent or any router.
+
+| Strategy key | What it does | Chunks over the 25 documents |
+|---|---|---|
+| `whole_document` | one chunk per document, the current behaviour | 25 |
+| `fixed_100` | every 100 words, no overlap | 60 |
+| `fixed_overlap_25` | every 100 words, 25 words of overlap | 65 |
+| `sentences_100` | whole sentences packed up to 100 words | 60 |
+| `sections_plain` | one chunk per `## ` section, packed up to 150 words | 158 |
+| `sections_contextual` | same, prefixed `Document title > Section heading` | 158 |
+
+- A chunk is `{id: "doc-01#00", doc_id, title, text}`, and `text` is what is embedded and what the model
+  reads. Text before the first `## ` (the title block every document has) becomes its own chunk, prefixed
+  with the title only.
+- `chunk_index.build(strategy)` fills one Chroma collection, `chunks_<strategy>`, in the same store as the
+  production index (`CHROMA_PATH`; the committed store holds only `Asset_Management_docs`). Each collection
+  stores a fingerprint of the model, chunk ids and texts and is rebuilt only when that changes or
+  `force=True`. A rebuild embeds first and replaces the old collection afterwards, so a Voyage failure keeps
+  the previous index. `embed_batched` sleeps 22 seconds after every batch to stay under the free tier's
+  3 requests per minute, so a full six-strategy build takes a few minutes.
+- `search_with_vectors(strategy, query_vectors, k)` takes questions that are already embedded, so one
+  embedding pass serves all strategies. Hits are `{id (the document), chunk_id, title, text, score}` with
+  `score = 1 - cosine distance`, as in 7.3. They carry no `as_of_date` or `status`, so they cannot yet feed
+  `routers/insights.build_context`. `cosine_for` gives a chunk found only by keyword search a cosine score
+  so the relevance floor applies to it too.
+- `bm25.BM25Index(chunks).search(query, k)` is a hand-written keyword index over the same chunks (no network).
+  `context.order_for_context` arranges hits in a U shape (best first, second best last, weakest in the
+  middle) and `context.build_context` labels them `[doc-NN] title`. There is no hybrid fusion step, no
+  entry-point script and no `__main__`: a comparison would have to be written.
+- Facts to keep in mind when reading results: the longest section is 65 words, so the 150-word cap never
+  splits one and the section strategies differ from `sentences_100` mainly by heading context; the
+  `fixed_*` strategies produce tail chunks as short as 3 words.
+- `tests/test_chunking.py` (2 tests, offline) covers the strategies. `chunk_index.py`, `bm25.py`, `context.py`
+  and the eval set have no tests.
+
+**Not built:** a runner that embeds `EVAL_SET`, retrieves under each strategy and reports hit rate (does the
+expected `doc_id` appear in the top k) and the best score for each question; recorded floor scores;
+hybrid search; wiring any chunked index into `/insights/ask` or the agent.
 
 ---
 
@@ -912,10 +1009,11 @@ or depend on the network in tests.
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 (covered for `/agent/ask`, `/insights/ask`, `/insights/client-fit` and the summary) |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` (`test_client_fit.py`) |
 
-**Status:** 77 tests, all passing (run `python -m pytest` from `Asset Management - API/`; the venv is at the project root). Per file: `test_funds.py` 4,
-`test_clients.py` 14, `test_portfolio.py` 8, `test_llm.py` 8, `test_agent.py` 15, `test_summary.py` 7, `test_client_fit.py` 12, `test_grounding.py` 4, `test_knowledge.py` 5.
+**Status:** 79 tests, all passing (run `python -m pytest` from `Asset Management - API/`; the venv is at the project root). Per file: `test_funds.py` 4,
+`test_clients.py` 14, `test_portfolio.py` 8, `test_llm.py` 8, `test_agent.py` 15, `test_summary.py` 7, `test_client_fit.py` 12, `test_grounding.py` 4, `test_knowledge.py` 5, `test_chunking.py` 2.
+Nothing tests the eval set, the BM25 index, the chunk index or the context ordering (7.7).
 The first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
-`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 77 pass in total with the four files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
+`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 79 pass in total with the files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
 `llm.answer_from_context` replaced by `monkeypatch` fakes: below the floor refuses with zero model calls, a cited answer passes with only cited ids in `sources` and a labelled context,
 the model's refusal sentence is refused, a citation to an unretrieved id is refused, and an uncited sentence is flagged not refused.
 `test_agent.py` fakes `agent.client.messages.create` and covers: a plain answer, a tool call then an answer (token totals summed), a model that never stops
@@ -972,16 +1070,16 @@ and the demo needs a real-model run of the agent, which has not happened yet (th
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
 | 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested, used by `/insights/client-fit` and the agent. No whole-portfolio endpoint or concentration rule (the agent checks a portfolio fund by fund) |
 | 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Partial: summary and `/insights/client-fit` built and tested with a fake model, not yet against real Claude. Streaming update (6.3) not built |
-| 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. Floor scores not recorded, no advice check |
+| 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. The 50-question eval set (`Eval/eval_set.py`) and six chunking strategies (`Chunking/`) exist, but no runner scores them: floor scores not recorded, no chunking comparison, no advice check (7.7) |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Done against a fake model (`test_agent.py`). Not yet tried with the real model |
 | 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API | Not started |
 | 8 | Hardening, READMEs, design note, demo rehearsal | fresh checkout runs from the README | Not started |
 
 ### Stretch goals
 
-Chunk long documents with source ids in metadata; filter searches by document type or date via
+Chunk long documents with source ids in metadata (strategies built in `Chunking/`, not wired in); filter searches by document type or date via
 Chroma metadata; rerank results; stream the grounded answer; build an evaluation set of questions
-with expected source documents and report retrieval hit rate; add authentication and rate
+with expected source documents (built, `Eval/eval_set.py`) and report retrieval hit rate (not built); add authentication and rate
 limiting; add a Dockerfile and compose file to run both projects.
 
 ---
