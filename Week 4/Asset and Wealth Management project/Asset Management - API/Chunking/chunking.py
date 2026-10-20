@@ -91,9 +91,10 @@ def by_section(doc: dict, max_words: int = 150, contextual: bool = True) -> list
     """
 
     chunks, number = [], 0
-    parts = re.split(r"(?m)^## ", doc["body"]) if "## " in doc["body"] else [doc["body"]]
-    for part in parts:
-        heading, _, text = part.partition("\n") if "## " in doc["body"] else ("", "", part)
+    parts = re.split(r"(?m)^## ", doc["body"])
+    for i, part in enumerate(parts):
+        # part 0 is the title block before the first heading, so it has no heading of its own
+        heading, text = ("", part) if i == 0 else part.partition("\n")[::2]
         heading, text = heading.strip(), text.strip()
         if not text:
             continue

@@ -7,12 +7,13 @@ embedding model that built it. If either changes, the collection
 is rebuilt from scratch.
 """
 
-import hashlib, chromadb, chunking, Data.knowledge as knowledge, time
-from Data.docs import DOCUMENTS
+import hashlib, chromadb, config, Data.knowledge as knowledge, time
+from Chunking import chunking
+from Data.docs import DOCUMENT_LIST
 
 BATCH_SIZE = 128 # Voyages own guidance: batch documents to stay well inside rate limits
 
-chroma = chromadb.PersistentClient(path="./chroma_store")
+chroma = chromadb.PersistentClient(path=config.CHROMA_PATH)
 
 def collection_name(strategy: str) -> str:
     return f"chunks_{strategy}"
@@ -31,7 +32,7 @@ def embed_batched(texts: list[str], input_type: str) -> tuple[list[list[float]],
         batch_vectors, batch_tokens = knowledge.embedded_texts(texts[start:start + BATCH_SIZE], input_type=input_type)
         vectors.extend(batch_vectors)
         tokens += batch_tokens
-    # Free Voyage accounts are limited to roughly 3 requests per minute.
+        # Free Voyage accounts are limited to roughly 3 requests per minute. This also spaces separate strategy builds.
         time.sleep(22)
     return vectors, tokens
 
@@ -46,20 +47,17 @@ def fingerprint(chunks: list[dict]) -> str:
 
 def build(strategy: str, force: bool = False) -> dict:
     "Make sure the strategy's collection matches the current corpus, chunker and model"
-    chunks = chunking.chunk_corpus(DOCUMENTS, strategy)
+    chunks = chunking.chunk_corpus(DOCUMENT_LIST, strategy)
     fp = fingerprint(chunks)
     col = collection_for(strategy)
     stored = col.get(limit = 1, include = ["metadatas"])["metadatas"]
     if not force and col.count() == len(chunks) and stored and stored[0].get("fingerprint") == fp:
         return {"strategy": strategy, "chunks": len(chunks), "embedding_tokens": 0, "rebuilt": False}
 
-    try:
-        chroma.delete_collection(collection_name(strategy))
-    except Exception:
-        pass
-
-    col = collection_for(strategy)
+    # Embed before deleting, so a Voyage failure leaves the existing index intact.
     vectors, tokens = embed_batched([c["text"]for c in chunks], input_type = "document")
+    chroma.delete_collection(collection_name(strategy))
+    col = collection_for(strategy)
     col.upsert(
         ids = [c["id"] for c in chunks],
         embeddings = vectors,
