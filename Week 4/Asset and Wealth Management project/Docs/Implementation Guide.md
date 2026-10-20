@@ -24,11 +24,11 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | `POST /insights/client-fit` (6.4) | Built | In `routers/insights.py`. Runs `mandate.check_fund`, then Claude via a forced tool call, validated, one retry then 502; a breach forces `fits = false`. Tested with a fake model only; never run against the real model |
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
 | `POST /insights/ask`, refusal (7.4) | Built (partial) | In `routers/insights.py`, registered in `main.py` (the spec calls this `/knowledge/ask`). Retrieve, relevance floor (refuses without calling Claude), labelled context, Claude, grounding check, provider errors mapped to 429/504/502. Not built: advice/forecast check, floor tuning, retry |
-| Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` is now wired into `/insights/ask` and acted on (see 7.6). Only covered by the endpoint tests, no direct unit tests of the pure functions |
+| Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` is now wired into `/insights/ask` and acted on (see 7.6). Direct tests of `check_citations` in `test_grounding.py`, plus the endpoint tests. Regex fixed to match ids of any length |
 | Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions. `check_fund` is served by `/insights/client-fit` and the agent's `check_mandate` tool |
 | Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check |
 | Streamlit UI (section 10) | Not built | `Asset Management - UI/` is an empty folder |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py` (68 tests pass in total); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py` (77 tests pass in total); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -200,6 +200,8 @@ Asset Management - API/
     test_agent.py         agent loop with a fake model, both tools, safe execution, /agent/ask status mapping
     test_summary.py       /funds/{id}/summary with a fake model: tokens, prompt caveats, 404, error mapping
     test_client_fit.py    /insights/client-fit with a fake model: forced fits=false, retry, 502, 404, error mapping
+    test_grounding.py     check_citations called directly: refusal, cited answer, uncited sentence, trailing citation
+    test_knowledge.py     /knowledge/index and /knowledge/search with the store faked: count and tokens, 409 before indexing, top_k bound; 422 on a short question
     conftest.py           restores CLIENTS and PORTFOLIOS after every test
 requirements.txt          at the repository root, not inside the API folder
 Asset Management - UI/    empty
@@ -670,7 +672,7 @@ Partly built. `AI_Layer/grounding.py` holds the cheap structural checks (pure fu
 no model, no FastAPI): `REFUSAL_SENTENCE`, `normalise`, `is_refusal`, `split_sentences`,
 `citations_in` and `check_citations`. The debug `print` has been removed. `llm.py` imports the module
 (fixed) and uses `REFUSAL_SENTENCE` in its prompt, and `routers/insights.py` calls `check_citations` and acts on the result
-(items 1 and 2 below are done). The pure functions are only tested indirectly through the `/insights/ask` tests. This section lists what is still missing.
+(items 1 and 2 below are done). `tests/test_grounding.py` now tests `check_citations` directly (items 4 and 6 are partly done). This section lists what is still missing.
 
 1. **Prompt side (`llm.py`). Done** (labels are built by `build_context` in `routers/insights.py`). Label each retrieved passage in the context with its `doc-NN` id, tell
    the model to cite every claim as `[doc-NN]`, give it the exact `REFUSAL_SENTENCE` to use when the
@@ -682,14 +684,15 @@ no model, no FastAPI): `REFUSAL_SENTENCE`, `normalise`, `is_refusal`, `split_sen
    document supports the sentence. Add a second step: an LLM judge call, or a cheap check that the
    numbers in a sentence appear in the text of the document it cites. Until then, describe the module
    as a structural check only.
-4. **Citation format variants.** The regex `\[(doc-\d{2})\]` misses `[doc-01, doc-02]` and `[doc-1]`.
-   Those sentences are marked uncited, which fails safe but gives false failures. Either rely on the
-   prompt (item 1) to fix the format, or widen the regex and add a test for each variant.
+4. **Citation format variants. Partly done.** The regex was `\[(doc-\d{2})\]`, which silently matched nothing
+   for ids with three digits such as `[doc-101]` (found by `test_grounding.py`). It is now `\[(doc-\d+)\]`, so `[doc-1]` and
+   `[doc-101]` match. It still misses `[doc-01, doc-02]`: that sentence is marked uncited, which fails safe but gives
+   a false failure. Either rely on the prompt (item 1) to fix the format, or widen the regex and add a test for it.
 5. **Known limit.** Sentence splitting on `. ` breaks on abbreviations ("approx. 5%") and can give a
    false "uncited" result. Accept it for a cheap check and note it.
-6. **Tests.** Cover the pure functions with no mocks: a refusal passes, an uncited sentence of three
-   or more words fails, a citation to a document not retrieved is `invalid`, and `Revenue rose. [doc-01]`
-   stays one sentence.
+6. **Tests. Partly done** (`tests/test_grounding.py`, 4 tests, no mocks): a refusal passes, a fully cited answer lists both ids,
+   an uncited sentence is flagged and fails the check, and `Revenue was $1.24 billion. [doc-101]` stays one sentence.
+   Still to add: a citation to a document not retrieved is `invalid`, `[doc-1]`, and `is_refusal(None)`.
 
 ---
 
@@ -877,13 +880,13 @@ or depend on the network in tests.
 | Summary | mocked Claude returns text and token counts are passed through (`test_summary.py`) |
 | Refusal rule | nothing above the floor gives `refused: true` **and the mocked LLM is called zero times** |
 | Advice refusal | "should I buy" is refused before retrieval |
-| Grounding checks | refusal passes; uncited sentence (3+ words) fails; citation to an unretrieved id is `invalid`; trailing citation stays with its sentence (section 7.6) |
+| Grounding checks | refusal passes; uncited sentence (3+ words) fails; citation to an unretrieved id is `invalid`; trailing citation stays with its sentence (section 7.6). All but `invalid` are in `test_grounding.py` |
 | Agent loop | normal completion; tool call then answer; unknown tool reported as error, not raised; missing argument; tool exception; **model that never stops** ends at `AGENT_MAX_ITERATIONS` with `completed: false` |
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 (covered for `/agent/ask`, `/insights/ask`, `/insights/client-fit` and the summary) |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` (`test_client_fit.py`) |
 
 **Status:** the first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
-`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 68 pass in total with the two files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
+`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 77 pass in total with the four files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
 `llm.answer_from_context` replaced by `monkeypatch` fakes: below the floor refuses with zero model calls, a cited answer passes with only cited ids in `sources` and a labelled context,
 the model's refusal sentence is refused, a citation to an unretrieved id is refused, and an uncited sentence is flagged not refused.
 `test_agent.py` fakes `agent.client.messages.create` and covers: a plain answer, a tool call then an answer (token totals summed), a model that never stops
@@ -891,7 +894,9 @@ the model's refusal sentence is refused, a citation to an unretrieved id is refu
 a tool exception reported as an error, the search floor and formatting, and `/agent/ask` (result passed through, 422 for a short question, 429/504/502 mapping).
 `conftest.py` sets placeholder API keys (always overriding any real key, so a stray provider call
 fails instead of spending money) and restores `CLIENTS` and `PORTFOLIOS` between tests. Not written: document integrity,
-filters, advice refusal, direct unit tests of `grounding.py` (including trailing-citation handling), a live-model run of summary and client-fit.
+filters, advice refusal, a direct test of an `invalid` citation in `grounding.py`, a live-model run of summary and client-fit.
+`test_grounding.py` (4 tests) calls `check_citations` directly with no mocks: refusal, fully cited answer, uncited sentence flagged, trailing citation kept with its sentence.
+`test_knowledge.py` (5 tests) fakes `knowledge.search`, `build_index` and `count`: ranked hits, 409 before indexing, `top_k` above 8 gives 422, `/knowledge/index` returns the count and token total, and a short question to `/insights/ask` gives 422. The ask endpoint itself is tested in `test_llm.py`.
 `test_summary.py` (7 tests) and `test_client_fit.py` (12 tests) fake `llm.client.messages.create`: tokens and prompt caveats, 404 with zero model calls, 429/504/502 mapping, a breach forcing `fits = false` and blocking `approve`, one retry on invalid output with summed tokens, 502 after two invalid outputs. No test calls Claude, Voyage or Chroma.
 
 Mocking approach: replace the client's `create` method and the embedding function with fakes using
