@@ -19,16 +19,16 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | Funds (read-only), Clients, Portfolios | Built (partial) | list, get, create, update, delete as in 5.2. **No query filters** |
 | Error scheme (5.3) | Partial | 404, 400, 422 in the record routers. Every Claude-calling endpoint (`/insights/ask`, `/insights/client-fit`, `/agent/ask`, `/funds/{id}/summary`) maps provider errors to 429/504/502 through `routers/errors.provider_errors`. No handler for Voyage or Chroma failures, no 500 mapping |
 | Configuration (section 3) | Built | `config.py` reads environment variables; no `.env.example` (see section 3) |
-| LLM features (section 6) | Partial | `AI_Layer/llm.py` holds the Anthropic client, `MODEL`, `GROUNDED_SYSTEM_PROMPT`, `answer_from_context` (7.4), `summarise_fund` (6.2) and `assess_fit` with the `Breach` / `MandateFitAssessment` models (6.4). Not built: streaming (6.3), token estimate (6.5), the standing rules in the grounded and agent prompts |
+| LLM features (section 6) | Partial | `AI_Layer/llm.py` holds the Anthropic client, `MODEL`, `GROUNDED_SYSTEM_PROMPT`, `answer_from_context` (7.4), `summarise_fund` (6.2) and `assess_fit` with the `Breach` / `MandateFitAssessment` models (6.4). Not built: streaming (6.3), token estimate (6.5), `/insights/compare` (10.4). The 6.1 standing rules exist only in the agent prompt (no advice, no forecasts); the grounded, summary and client-fit prompts do not state them |
 | `GET /funds/{id}/summary` (6.2) | Built | In `routers/funds.py`. Fund record in the prompt, 404 before any model call, 429/504/502 mapped. Tested with a fake model only |
 | `POST /insights/client-fit` (6.4) | Built | In `routers/insights.py`. Runs `mandate.check_fund`, then Claude via a forced tool call, validated, one retry then 502; a breach forces `fits = false`. Tested with a fake model only; never run against the real model |
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
 | `POST /insights/ask`, refusal (7.4) | Built (partial) | In `routers/insights.py`, registered in `main.py` (the spec calls this `/knowledge/ask`). Retrieve, relevance floor (refuses without calling Claude), labelled context, Claude, grounding check, provider errors mapped to 429/504/502. Not built: advice/forecast check, floor tuning, retry |
 | Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` is now wired into `/insights/ask` and acted on (see 7.6). Direct tests of `check_citations` in `test_grounding.py`, plus the endpoint tests. Regex fixed to match ids of any length |
 | Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions. `check_fund` is served by `/insights/client-fit` and the agent's `check_mandate` tool |
-| Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check |
-| Streamlit UI (section 10) | Not built | `Asset Management - UI/` is an empty folder |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py` (77 tests pass in total); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
+| Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check. The search tool's output omits each passage's as-of date and status |
+| Streamlit UI (section 10) | Not built | `Asset Management - UI/` does not exist yet |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py` (77 tests pass in total, run from `Asset Management - API/`); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -56,8 +56,8 @@ arithmetic or decides compliance by itself.
 ## 2. Architecture
 
 Two separate projects, intended to have their own virtual environment and `requirements.txt`.
-Today only the API exists: `Asset Management - UI/` is empty, and a single `requirements.txt` at the
-repository root covers the API (FastAPI, uvicorn, httpx, pydantic, pytest, mypy, ruff, chromadb,
+Today only the API exists: the `Asset Management - UI/` folder has not been created, and a single
+`requirements.txt` and `.venv` at the project root (next to the API folder) cover the API (FastAPI, uvicorn, httpx, pydantic, pytest, mypy, ruff, chromadb,
 voyageai, anthropic). It has no Streamlit.
 
 ```
@@ -96,15 +96,16 @@ determined by deterministic screening"), meaning the mandate rules in section 8 
 
 ```
 records.py (FUNDS, CLIENTS, PORTFOLIOS)
-    -> routers (CRUD, filters, read-only funds)        structured lookups
+    -> routers (CRUD, read-only funds; filters not built)  structured lookups
     -> mandate.py (section 8), checked by the tests     compliance facts
-    -> llm.py (summary, streaming, client-fit)         record fields go into the prompt
+    -> llm.py (summary, client-fit; streaming not built)  record fields go into the prompt
+    -> /insights/client-fit (mandate result goes into the prompt)
     -> agent tool: check_mandate
 
 docs.py (DOCUMENTS)
-    -> knowledge_store.index: embed with Voyage (document type), upsert into Chroma
-    -> knowledge_store.search: embed query (query type), Chroma top k, score, floor
-    -> /knowledge/search, /insights/ask (refuse here, else Claude with retrieved text; spec name /knowledge/ask)
+    -> knowledge_store.build_index: embed with Voyage (document type), upsert into Chroma
+    -> knowledge_store.search: embed query (query type), Chroma top k, score (no floor here)
+    -> /knowledge/search (no floor), /insights/ask and the agent search tool (both apply the floor: refuse here, else Claude with retrieved text; spec name /knowledge/ask)
     -> agent tool: search_knowledge_base
 ```
 
@@ -141,7 +142,7 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **RAG (Retrieval-Augmented Generation)**
 - *What:* Retrieve relevant documents first, then give only those to the model to answer from.
-- *Here:* `/knowledge/ask` embeds the question, retrieves the top matches from Chroma, and asks Claude to answer using only those passages and to cite their ids. This keeps answers grounded and checkable.
+- *Here:* `/insights/ask` (the spec calls it `/knowledge/ask`) embeds the question, retrieves the top matches from Chroma, and asks Claude to answer using only those passages and to cite their ids. This keeps answers grounded and checkable.
 
 **Tool use and structured output**
 - *What:* Claude can be given tools with JSON schemas. It replies with a request to call one, and our code runs it. A tool schema can also force the reply into a fixed shape.
@@ -165,7 +166,7 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **pytest with mocking**
 - *What:* pytest runs the tests. Mocking swaps real services for fakes.
-- *Here:* Fake Claude and Voyage responses (via `monkeypatch`) keep tests free, fast and repeatable, and let us simulate a model that never stops. (`test_llm.py` and `test_agent.py` use them.)
+- *Here:* Fake Claude and Voyage responses (via `monkeypatch`) keep tests free, fast and repeatable, and let us simulate a model that never stops. (`test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py` and `test_knowledge.py` use them.)
 
 ### API layout
 
@@ -179,9 +180,11 @@ Asset Management - API/
   Data/
     records.py            in-memory record store and seed data (SECTORS, FUNDS, CLIENTS, PORTFOLIOS)
     docs.py               the 25 source documents (DOCUMENTS dict and DOCUMENT_LIST for the knowledge base)
-    knowledge.py          Voyage client and `embedded_texts`, plus an older in-memory index (build_index,
-                          search, cosine_similarity) that the API does not use
-    knowledge_store.py    Chroma + Voyage: build_index, search, count
+    knowledge.py          Voyage client and `embedded_texts` (used), plus an older in-memory index (build_index,
+                          search, cosine_similarity) that the API does not use and that is broken: it loops over
+                          the DOCUMENTS dict as if it were a list and `search` reads keys it never stored.
+                          Delete it, or fix it, before anyone calls it
+    knowledge_store.py    Chroma + Voyage: build_index, search, count. Opens the Chroma store at import
   AI_Layer/
     llm.py                Anthropic client, MODEL, prompts, answer_from_context, summarise_fund, assess_fit, Breach, MandateFitAssessment
     agent.py              tool-use loop: ask_with_tools, execute_tool, the two tool schemas (section 9)
@@ -201,14 +204,18 @@ Asset Management - API/
     test_summary.py       /funds/{id}/summary with a fake model: tokens, prompt caveats, 404, error mapping
     test_client_fit.py    /insights/client-fit with a fake model: forced fits=false, retry, 502, 404, error mapping
     test_grounding.py     check_citations called directly: refusal, cited answer, uncited sentence, trailing citation
-    test_knowledge.py     /knowledge/index and /knowledge/search with the store faked: count and tokens, 409 before indexing, top_k bound; 422 on a short question
-    conftest.py           restores CLIENTS and PORTFOLIOS after every test
-requirements.txt          at the repository root, not inside the API folder
-Asset Management - UI/    empty
+    test_knowledge.py     /knowledge/index and /knowledge/search with the store faked: count and tokens, 409 when the fake raises, top_k bound; 422 on a short question
+    conftest.py           sets placeholder API keys, restores CLIENTS and PORTFOLIOS after every test
+  chroma_store/           the persistent index (CHROMA_PATH, 25 documents indexed). Committed to git
+requirements.txt          at the project root, not inside the API folder (so is the .venv)
+chroma_store/             stray: CHROMA_PATH is relative to the working directory, so an empty
+                          store appears at the project root, and in tests/, when the server or pytest starts there
+Docs/                     this guide, the project brief, the application overview (.docx)
+Asset Management - UI/    does not exist yet
 ```
 
 Still to create: `models.py`,
-the UI's `app.py` and both READMEs. Request models live inside each router file, and `Breach` / `MandateFitAssessment` live in `llm.py`.
+the UI folder with its `app.py`, and both READMEs. Request models live inside each router file, and `Breach` / `MandateFitAssessment` live in `llm.py`.
 
 Keep business logic (`AI_Layer/agent.py`, `llm.py`) free of FastAPI imports so it can be
 tested directly. Routers only translate HTTP to function calls and errors to status codes.
@@ -232,11 +239,13 @@ All configuration comes from environment variables. No secrets in code. This pro
 Load them in one `config.py` and fail fast with a clear message if a required key is missing.
 
 **Status: built** as `Asset Management - API/config.py`. It reads every variable above from the
-environment, with the defaults shown (`voyage-3-lite`, `./chroma_store`, floor 0.425, 5 iterations, 120
-days), and `require(name)` raises a clear `RuntimeError` for a missing key. No secret is stored in
+environment, with the defaults shown (`claude-haiku-4-5-20251001`, `voyage-3-lite`, `./chroma_store`, floor 0.425, 5
+iterations), and `require(name)` raises a clear `RuntimeError` for a missing key. No secret is stored in
 code. `AI_Layer/llm.py` requires `ANTHROPIC_API_KEY` and `Data/knowledge.py` requires `VOYAGE_API_KEY`,
 each at import, so starting the server needs `VOYAGE_API_KEY` set in that terminal. The tests do not:
-`conftest.py` sets placeholder keys. `AGENT_MAX_ITERATIONS` is used by the agent loop. The client timeouts (Anthropic 50 s, Voyage 3 s) and retry counts are still
+`conftest.py` sets placeholder keys. `AGENT_MAX_ITERATIONS` is used by the agent loop. `CHROMA_PATH` is
+relative, so it resolves from wherever the process starts: start the server and run the tests from
+`Asset Management - API/`, or you will get a second, empty store. The client timeouts (Anthropic 50 s, Voyage 3 s) and retry counts are still
 hard-coded in their modules. There is no `.env.example` (you set keys by hand per terminal).
 
 ---
@@ -437,8 +446,7 @@ Voyage or Chroma failures, and no 500.
 the Anthropic client, the model name, `GROUNDED_SYSTEM_PROMPT` (British English, client-friendly,
 use only the figures given, cite `[doc-NN]`, caveat dated or historical passages, use the exact refusal
 sentence, never invent facts) and `answer_from_context`, which serves the grounded answer in 7.4.
-The standing rules in 6.1 (`STANDING_RULES`) are in the summary and client-fit prompts only, not yet in the grounded-answer or agent prompts. The risk warning line belongs to the streaming update (6.3), not built.
-The earlier broken grounding import is fixed (`import AI_Layer.grounding`), so `llm.py` imports cleanly.
+There is no `STANDING_RULES` constant. The summary and client-fit prompts are built on top of `GROUNDED_SYSTEM_PROMPT`, so they inherit its rules (use only the given figures, never invent, British English, text between tags is data) and also its citation and refusal-sentence instructions, which make no sense when no documents are supplied. None of the three `llm.py` prompts says "no personal advice, no forecasts"; only the agent prompt does (9.5). The risk warning line belongs to the streaming update (6.3), not built.
 
 ### 6.1 Prompt design rules
 
@@ -460,7 +468,7 @@ holdings are top positions only and that no benchmark returns are supplied, so n
 { "summary": "...", "input_tokens": 412, "output_tokens": 158 }
 ```
 
-**Status: built** in `routers/funds.py` (`summarise`) and `llm.summarise_fund`. The fund record goes into the user message inside `<fund>` tags (dates as ISO strings). The system prompt carries `STANDING_RULES` plus the top-positions-only and no-benchmark-returns caveats. `max_tokens` 400. An unknown id is a 404 with no model call; provider errors map to 429/504/502 through `routers/errors.provider_errors`. Plain `def`, not `async`.
+**Status: built** in `routers/funds.py` (`summarise`) and `llm.summarise_fund`. The fund record goes into the user message inside `<fund>` tags (dates as ISO strings). The system prompt is `SUMMARY_SYSTEM_PROMPT`: the grounded prompt plus the top-positions-only, no-benchmark-returns and NAV-trend caveats (it does not state the no-advice or no-forecast rule). `max_tokens` 400. An unknown id is a 404 with no model call; provider errors map to 429/504/502 through `routers/errors.provider_errors`. Plain `def`, not `async`.
 
 ### 6.3 Streaming client update
 
@@ -504,7 +512,7 @@ validation. Do not trust the model to agree.
 **Status: built** in `routers/insights.py` (`client_fit`) and `llm.assess_fit`. Body `{"fund_id", "client_id"}`; an unknown id is a 404 with no model call.
 
 1. `mandate.check_fund` computes the breaches.
-2. `assess_fit` sends the client, fund and breaches (in `<client>`, `<fund>`, `<mandate_check_result>` tags) and forces the reply through a `record_assessment` tool whose schema is `MandateFitAssessment`. The system prompt says the breach list is authoritative.
+2. `assess_fit` sends the client, fund and breaches (in `<client>`, `<fund>`, `<mandate_check_result>` tags) and forces the reply through a `record_assessment` tool whose schema is `MandateFitAssessment` (`max_tokens` 800). The system prompt (`ASSESSMENT_SYSTEM_PROMPT`) says the breach list is authoritative and that an empty list covers top holdings only.
 3. The output is validated with `model_validate`. A failure or a missing tool block is retried once, then `InvalidAssessment` becomes a 502. Token counts are summed over both attempts.
 4. Enforced in code, whatever the model said: any breach sets `fits = false`, and `recommended_action: "approve"` becomes `"review"` (an extra rule beyond the spec; `reject` is left alone).
 
@@ -514,6 +522,9 @@ Response: `{"fund_id", "client_id", "breaches": [{rule, actual, limit, detail}],
 
 Every generated answer returns `input_tokens` and `output_tokens` (from the provider usage
 object). Optionally add `POST /tokens/estimate` using the provider's token counting.
+
+**Status:** the summary, client-fit and agent endpoints always return both counts, and `/insights/ask`
+returns them whenever Claude was called (a below-floor refusal has none). `/tokens/estimate` is not built.
 
 ---
 
@@ -585,9 +596,15 @@ than writing it. A search result with no `fund_id` key then means "firm-wide or 
 
 **Status:** built in `Data/knowledge_store.py` and `POST /knowledge/index`, with these differences from
 the spec: the metadata key is `type`, not `doc_type`; it also stores `title` and `effective_date`;
-`fund_id` and `client_id` are written even when `None` (the "leave out" rule is not followed); and
-the response is `{"indexed": count(), "embedding_tokens": n}`, where `count()` returns `collection.count()`, the number of documents in the collection. The Chroma
-collection is `Asset_Management_docs` with cosine space, at `./chroma_store`.
+`fund_id` and `client_id` are passed to Chroma even when `None` (the code does not omit them), but
+Chroma 1.5.9 accepts a `None` value and drops the key, so a stored document with no fund or client
+has no such key, as the spec wants (checked against the installed version; an upgrade could change
+this); and the response is `{"indexed": count(), "embedding_tokens": n}`, where `count()` returns `collection.count()`, the number of documents in the collection. The Chroma
+collection is `Asset_Management_docs` with cosine space, at `./chroma_store`, relative to the working
+directory (see section 3). The committed store in `Asset Management - API/chroma_store` holds all 25
+documents. Importing `knowledge_store` opens the store, so merely running the tests from that
+folder rewrites its `chroma.sqlite3` and shows up as a git change. `DOCUMENT_LIST` is defined but
+nothing uses it: indexing reads `DOCUMENTS.values()`.
 
 Chunking decision: documents of one to two pages can be embedded whole, which keeps context
 intact. The longest current document (`doc-01`) is about 310 words, so **none of the 25 reaches the
@@ -666,11 +683,14 @@ the model each passage's `as_of_date` and `status` so it can caveat ("as of Q1")
 
 **Status:** the dates and `status` are stored and returned by search. Nothing else uses them yet.
 
-### 7.6 Answer grounding checks (to implement later)
+### 7.6 Answer grounding checks (partly built)
 
 Partly built. `AI_Layer/grounding.py` holds the cheap structural checks (pure functions: no network,
 no model, no FastAPI): `REFUSAL_SENTENCE`, `normalise`, `is_refusal`, `split_sentences`,
-`citations_in` and `check_citations`. The debug `print` has been removed. `llm.py` imports the module
+`citations_in` and `check_citations`. The debug `print` has been removed (a commented-out one
+remains). `split_sentences` works line by line, strips list markers, splits after `.`, `!` or `?` followed by
+whitespace, and glues a piece that is only a citation to the sentence before it. `check_citations`
+ignores sentences under three words. `llm.py` imports the module
 (fixed) and uses `REFUSAL_SENTENCE` in its prompt, and `routers/insights.py` calls `check_citations` and acts on the result
 (items 1 and 2 below are done). `tests/test_grounding.py` now tests `check_citations` directly (items 4 and 6 are partly done). This section lists what is still missing.
 
@@ -692,7 +712,10 @@ no model, no FastAPI): `REFUSAL_SENTENCE`, `normalise`, `is_refusal`, `split_sen
    false "uncited" result. Accept it for a cheap check and note it.
 6. **Tests. Partly done** (`tests/test_grounding.py`, 4 tests, no mocks): a refusal passes, a fully cited answer lists both ids,
    an uncited sentence is flagged and fails the check, and `Revenue was $1.24 billion. [doc-101]` stays one sentence.
-   Still to add: a citation to a document not retrieved is `invalid`, `[doc-1]`, and `is_refusal(None)`.
+   Weak spots: the fully cited test only checks that two ids were cited (its `passed` assertion is commented out), the
+   trailing-citation test has a live `print` and a commented-out `cited` assertion, and `SOURCES` is never used.
+   An `invalid` citation is covered only through the endpoint (`test_llm.py`). Still to add: a direct `invalid` test,
+   `[doc-1]`, and `is_refusal(None)`.
 
 ---
 
@@ -717,7 +740,7 @@ Conventions the documents rely on:
 
 - A value exactly equal to a limit is compliant. Only a value above the limit is a breach
   (the Fund 5 / Client 5 boundary case).
-- A rule that is `None` on the client (no ESG minimum, no fee ceiling) is skipped.
+- A rule that is `None` on the client (no risk tolerance, concentration limit, ESG minimum or fee ceiling) is skipped. Clients created through the API can leave any of them unset.
 - `unrated` is not in the A > B > C > D ordering. It fails any ESG minimum, so Fund 6 is flagged
   for a client with one.
 - Holdings are top positions only, so a clean result means "no breach among reported holdings",
@@ -741,9 +764,8 @@ FastAPI imports (it reads `FUNDS` only):
   and ignores cash.
 
 The tests call it: `breached_rules` in `test_clients.py` wraps `mandate.check_fund`, and `test_portfolio.py`
-wraps `mandate.look_through_exposure`. No endpoint calls `check_fund` in product code yet
-(`/insights/client-fit` is not built, see 6.4). There is no check of a whole portfolio against a client,
-but the agent's `check_mandate` tool (section 9) does: it calls `check_fund` for a fund, or for each position of a portfolio plus `look_through_exposure` for the client's excluded sectors.
+wraps `mandate.look_through_exposure`. Two callers use `check_fund` in product code: `POST /insights/client-fit` (6.4) and the agent's `check_mandate` tool (section 9). No
+endpoint checks a whole portfolio against a client, but the agent's tool does: it calls `check_fund` for a fund, or for each position of a portfolio plus `look_through_exposure` for the client's excluded sectors.
 
 ---
 
@@ -752,7 +774,7 @@ but the agent's `check_mandate` tool (section 9) does: it calls `check_fund` for
 **Status of section 9: built (partial).** `AI_Layer/agent.py` holds the loop (`ask_with_tools`), `execute_tool`,
 the two tool schemas and the system prompt. `routers/agent.py` serves `POST /agent/ask` (body `{"question": "..."}`, at least 3
 characters), registered in `main.py`. The loop reads `config.AGENT_MAX_ITERATIONS`. It is tested with a fake model only
-(`tests/test_agent.py`) and has never been run against the real model. **Section 10 is not built:** the UI folder is empty.
+(`tests/test_agent.py`) and has never been run against the real model. **Section 10 is not built:** there is no UI folder yet.
 
 ### 9.1 Tools
 
@@ -766,7 +788,11 @@ reads the record stream (`records.py`). There is deliberately no `get_fund` tool
 fund X breach client Y's exclusion, and what does our policy say?", and its system prompt must tell
 it to take exact numbers from the record tools and policy wording from the search tool.
 
-Each has a JSON input schema with a clear description so the model knows when to use it. `search_knowledge_base` applies the same `RELEVANCE_FLOOR` as `/insights/ask`, so weak matches never reach the model, and returns the top 3.
+Each has a JSON input schema with a clear description so the model knows when to use it. `search_knowledge_base` applies the same `RELEVANCE_FLOOR` as `/insights/ask`, so weak matches never reach the model, and returns the top 3. Each passage is formatted `[doc-NN] title (score 0.xx)` then its text, with no as-of date or status, so the agent cannot caveat a historical document the way `/insights/ask` can.
+
+Result shapes of `check_mandate` (JSON text): for a fund, `{"client_id", "fund_id", "breaches": [...]}`; for a
+portfolio, `{"client_id", "portfolio_id", "breaches_by_fund": {fund_id: [...]}, "excluded_sector_exposure_pct": {sector: pct}}`, where
+the exposure map lists only sectors above 0 (JSON turns the integer fund ids into strings).
 
 ### 9.2 The loop
 
@@ -808,7 +834,8 @@ On hitting the limit the route returns HTTP 200 with
 
 because hitting the limit is an expected outcome, not a server fault. (The spec said `"answer": null`; the
 code uses a plain sentence instead, so a UI that shows `answer` needs no special case. Show the `completed` warning too.)
-`tool_calls_made` counts successful calls only. Both paths return `answer`, `completed`,
+`tool_calls_made` counts successful calls only. Each model call uses `max_tokens` 600, and a final reply cut off at that
+limit still comes back `completed: true` with `stop_reason: "max_tokens"` and a possibly truncated answer. Both paths return `answer`, `completed`,
 `stop_reason`, `tool_calls_made`, `input_tokens`, `output_tokens`.
 
 **Endpoint errors** (`routers/agent.py`, same style as `/insights/ask`): rate limit 429, provider timeout 504,
@@ -880,12 +907,14 @@ or depend on the network in tests.
 | Summary | mocked Claude returns text and token counts are passed through (`test_summary.py`) |
 | Refusal rule | nothing above the floor gives `refused: true` **and the mocked LLM is called zero times** |
 | Advice refusal | "should I buy" is refused before retrieval |
-| Grounding checks | refusal passes; uncited sentence (3+ words) fails; citation to an unretrieved id is `invalid`; trailing citation stays with its sentence (section 7.6). All but `invalid` are in `test_grounding.py` |
+| Grounding checks | refusal passes; uncited sentence (3+ words) fails; citation to an unretrieved id is `invalid`; trailing citation stays with its sentence (section 7.6). All but `invalid` are in `test_grounding.py`; `invalid` is covered only through `/insights/ask` in `test_llm.py` |
 | Agent loop | normal completion; tool call then answer; unknown tool reported as error, not raised; missing argument; tool exception; **model that never stops** ends at `AGENT_MAX_ITERATIONS` with `completed: false` |
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 (covered for `/agent/ask`, `/insights/ask`, `/insights/client-fit` and the summary) |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` (`test_client_fit.py`) |
 
-**Status:** the first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
+**Status:** 77 tests, all passing (run `python -m pytest` from `Asset Management - API/`; the venv is at the project root). Per file: `test_funds.py` 4,
+`test_clients.py` 14, `test_portfolio.py` 8, `test_llm.py` 8, `test_agent.py` 15, `test_summary.py` 7, `test_client_fit.py` 12, `test_grounding.py` 4, `test_knowledge.py` 5.
+The first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
 `test_llm.py` (8 tests) and `test_agent.py` (15 tests; 77 pass in total with the four files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
 `llm.answer_from_context` replaced by `monkeypatch` fakes: below the floor refuses with zero model calls, a cited answer passes with only cited ids in `sources` and a labelled context,
 the model's refusal sentence is refused, a citation to an unretrieved id is refused, and an uncited sentence is flagged not refused.
@@ -896,8 +925,8 @@ a tool exception reported as an error, the search floor and formatting, and `/ag
 fails instead of spending money) and restores `CLIENTS` and `PORTFOLIOS` between tests. Not written: document integrity,
 filters, advice refusal, a direct test of an `invalid` citation in `grounding.py`, a live-model run of summary and client-fit.
 `test_grounding.py` (4 tests) calls `check_citations` directly with no mocks: refusal, fully cited answer, uncited sentence flagged, trailing citation kept with its sentence.
-`test_knowledge.py` (5 tests) fakes `knowledge.search`, `build_index` and `count`: ranked hits, 409 before indexing, `top_k` above 8 gives 422, `/knowledge/index` returns the count and token total, and a short question to `/insights/ask` gives 422. The ask endpoint itself is tested in `test_llm.py`.
-`test_summary.py` (7 tests) and `test_client_fit.py` (12 tests) fake `llm.client.messages.create`: tokens and prompt caveats, 404 with zero model calls, 429/504/502 mapping, a breach forcing `fits = false` and blocking `approve`, one retry on invalid output with summed tokens, 502 after two invalid outputs. No test calls Claude, Voyage or Chroma.
+`test_knowledge.py` (5 tests) fakes `knowledge.search`, `build_index` and `count`: ranked hits, 409 when the faked search raises `RuntimeError` (the real search never does, so this proves the router mapping only, not the behaviour before indexing), `top_k` above 8 gives 422, `/knowledge/index` returns the count and token total, and a short question to `/insights/ask` gives 422. The ask endpoint itself is tested in `test_llm.py`.
+`test_summary.py` (7 tests) and `test_client_fit.py` (12 tests) fake `llm.client.messages.create`: tokens and prompt caveats, 404 with zero model calls, 429/504/502 mapping, a breach forcing `fits = false` and blocking `approve`, one retry on invalid output with summed tokens, 502 after two invalid outputs. No test calls Claude or Voyage, and none queries Chroma, but importing the app opens the on-disk store (see 7.2).
 
 Mocking approach: replace the client's `create` method and the embedding function with fakes using
 `monkeypatch`. For the iteration limit test, make the fake model return a tool request every time,
@@ -941,7 +970,7 @@ and the demo needs a real-model run of the agent, which has not happened yet (th
 |---|---|---|---|
 | 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass | Done, except the document integrity test (section 11) |
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
-| 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested. No whole-portfolio check yet |
+| 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested, used by `/insights/client-fit` and the agent. No whole-portfolio endpoint or concentration rule (the agent checks a portfolio fund by fund) |
 | 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Partial: summary and `/insights/client-fit` built and tested with a fake model, not yet against real Claude. Streaming update (6.3) not built |
 | 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. Floor scores not recorded, no advice check |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Done against a fake model (`test_agent.py`). Not yet tried with the real model |
