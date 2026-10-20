@@ -24,7 +24,7 @@ def test_fully_cited_answer_passes():
 def test_uncited_sentence_is_flagged():
     answer = "Revenue was $1.24 billion [doc-101]. Profit also rose sharply this year."
     report = AI_Layer.grounding.check_citations(answer, ["doc-101"])
-    assert report["uncited_sentences"] is not None 
+    assert report["uncited_sentences"] == ["Profit also rose sharply this year."]
     assert report["passed"] is False
 
 # test citation after the full stop still counts
