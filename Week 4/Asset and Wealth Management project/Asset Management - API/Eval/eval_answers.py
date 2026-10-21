@@ -1,16 +1,16 @@
 """
 Answer quality for the strategies your shortlist... this file will call the model.
 
-Cost: one model call per question strategy, we have 32 questions with 3 chunks of context each
+Cost: one model call per question strategy, we have 50 questions with 3 chunks of context each
 
 Print results to aval_results/answer.json.
 """
 
 import argparse, json, statistics, pathlib
-import Chunking.chunk_index as chunk_index, AI_Layer.llm as llm, Chunking.context as context
+import config, Chunking.chunk_index as chunk_index, AI_Layer.llm as llm, Chunking.context as context
 from pathlib import Path
-from eval_set import EVAL_SET
-from eval_tools import keywords_present
+from Eval.eval_set import EVAL_SET
+from Eval.eval_tools import keywords_present
 from AI_Layer.grounding import is_refusal
 
 def run(strategy: str, vectors: list[list[float]], floor: float) -> dict:
@@ -51,7 +51,7 @@ def run(strategy: str, vectors: list[list[float]], floor: float) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("strategies", nargs="+")
-    parser.add_argument("--floor", type=float, default=0.35)
+    parser.add_argument("--floor", type=float, default=config.RELEVANCE_FLOOR)
     args = parser.parse_args()
 
     for strategy in args.strategies:

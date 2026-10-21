@@ -26,12 +26,13 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
 | `POST /insights/ask`, refusal (7.4) | Built (partial) | In `routers/insights.py`, registered in `main.py` (the spec calls this `/knowledge/ask`). Retrieve, relevance floor (refuses without calling Claude), labelled context, Claude, grounding check, provider errors mapped to 429/504/502. Not built: advice/forecast check, floor tuning, retry |
 | Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` is now wired into `/insights/ask` and acted on (see 7.6). Direct tests of `check_citations` in `test_grounding.py`, plus the endpoint tests. Regex fixed to match ids of any length |
-| Evaluation set (7.7) | Built (data only) | `Eval/eval_set.py`: 50 questions (40 answerable with expected `doc_id`, evidence and keywords; 10 that must be refused). No runner, no scoring, no recorded results, so the floor and the chunking choice are still unmeasured |
-| Chunking experiments (7.7) | Built, not wired in | `Chunking/`: six strategies, one Chroma collection per strategy, BM25, context ordering. Nothing in the API calls it, no strategy collection has been built, and no comparison has been run. The production index still embeds whole documents |
+| Evaluation set (7.7) | Built, runners not yet run | `Eval/eval_set.py`: 50 questions (40 answerable with expected `doc_id`, evidence and keywords; 10 that must be refused). Runners copied from Firm Intelligence and adapted: `eval_retrieval.py`, `eval_answers.py`, `floor_preview.py`, helpers in `eval_tools.py`. They have never been run here, so the floor and the chunking choice are still unmeasured |
+| Chunking experiments (7.7) | Built, not wired in | `Chunking/`: six strategies, one Chroma collection per strategy, BM25, context ordering, plus `fusion.py` (RRF) and `hybrid.py` (vector + BM25 search). Nothing in the API calls it, and the eval runners score vector search only, so hybrid is unused. No strategy collection has been built and no comparison has been run. The production index still embeds whole documents |
+| Azure AI Search (7.8) | Deferred | Not ported. Firm Intelligence has a working design for it; see 7.8 for what it does and the problems to fix when it is added |
 | Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions. `check_fund` is served by `/insights/client-fit` and the agent's `check_mandate` tool |
 | Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check. The search tool's output omits each passage's as-of date and status |
 | Streamlit UI (section 10) | Not built | `Asset Management - UI/` does not exist yet |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_portfolio_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py` (87 tests pass in total, run from `Asset Management - API/`; nothing tests the eval set); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_fund_summary.py`, `test_portfolio_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_portfolio_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py`, `test_eval_set.py` (91 tests pass in total, run from `Asset Management - API/`; `test_eval_set.py` checks the eval set against the documents, and nothing tests `bm25.py`, `chunk_index.py`, `fusion.py`, `hybrid.py` or `context.py`); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_fund_summary.py`, `test_portfolio_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -75,6 +76,7 @@ External services (all real, nothing mocked in the running system):
 | Claude (Anthropic API) | Summaries, structured analysis, grounded answers, agent reasoning |
 | Voyage AI | Turns text into embedding vectors |
 | Chroma | Persistent vector database on local disk |
+| Azure AI Search | Deferred, not used yet. Hosted keyword + vector search with a semantic reranker (7.8) |
 
 Request flow for a grounded question:
 
@@ -197,8 +199,14 @@ Asset Management - API/
     chunk_index.py        one Chroma collection per strategy: build, search_with_vectors, cosine_for
     bm25.py               hand-written BM25 keyword index over the same chunks
     context.py            order_for_context (U-shape) and build_context for chunk hits
-  Eval/
+    fusion.py             reciprocal_rank_fusion: merges ranked id lists (used by hybrid.py)
+    hybrid.py             search_with_vector: vector + BM25 merged by RRF, found_by / exact_match / rrf on each hit, is_usable gate. Not called by anything yet
+  Eval/                   run as `python -m Eval.<module>` from this folder
     eval_set.py           EVAL_SET (50 questions), EVAL_SET_SUMMARY, RESEARCH_SOURCES, answerable(), unanswerable() (7.7)
+    eval_tools.py         contains_evidence, keywords_present (pure scoring helpers)
+    eval_retrieval.py     scores every strategy: recall@1/3/5, MRR, context words, top scores, missed@3 (7.7)
+    eval_answers.py       asks Claude with each strategy's top 3 chunks and scores the answers (7.7)
+    floor_preview.py      best score per question and what each floor would refuse (7.7)
   routers/
     funds.py              also GET /funds/{id}/summary (6.2)
     portfolio.py          also GET /portfolios/{id}/summary (6.2)
@@ -217,6 +225,7 @@ Asset Management - API/
     test_client_fit.py    /insights/client-fit with a fake model: forced fits=false, retry, 502, 404, error mapping
     test_grounding.py     check_citations called directly: refusal, cited answer, uncited sentence, trailing citation
     test_knowledge.py     /knowledge/index and /knowledge/search with the store faked: count and tokens, 409 when the fake raises, top_k bound; 422 on a short question
+    test_eval_set.py      eval set against the documents: unique ids, evidence present, in one section and unique in the corpus; keyword matching is whole-word and refusal-aware
     test_chunking.py      every strategy on the real corpus, offline: unique non-empty chunks, no text lost, title-only prefix before the first heading
     conftest.py           sets placeholder API keys, restores CLIENTS and PORTFOLIOS after every test
   chroma_store/           the persistent index (CHROMA_PATH, 25 documents indexed). Committed to git
@@ -746,7 +755,8 @@ ignores sentences under three words. `llm.py` imports the module
 
 **Status: built as data and tooling, never run.** Two folders under `Asset Management - API/` exist to answer
 two open questions: where the relevance floor should sit (7.4) and whether chunking beats whole-document
-embedding (7.2). Neither question has an answer yet, because nothing scores the set against any index.
+embedding (7.2). Neither question has an answer yet: the runners that score the set against each index now exist
+(below) but have not been run.
 
 **Evaluation set** (`Eval/eval_set.py`). `EVAL_SET` is a list of 50 dicts, `q01` to `q50`, each with `id`,
 `question`, `doc_id`, `evidence`, `keywords` and `kind`. The module also holds `EVAL_SET_SUMMARY` (counts;
@@ -810,17 +820,72 @@ Conventions a runner must follow:
   so the relevance floor applies to it too.
 - `bm25.BM25Index(chunks).search(query, k)` is a hand-written keyword index over the same chunks (no network).
   `context.order_for_context` arranges hits in a U shape (best first, second best last, weakest in the
-  middle) and `context.build_context` labels them `[doc-NN] title`. There is no hybrid fusion step, no
-  entry-point script and no `__main__`: a comparison would have to be written.
+  middle) and `context.build_context` labels them `[doc-NN] title`.
+- `fusion.reciprocal_rank_fusion(rankings, k=60)` scores each id `1 / (k + position)` per list and sums them.
+  `hybrid.search_with_vector(strategy, question, query_vector, top_k=3, pool=10)` takes the top 10 from the
+  vector index and from BM25, merges them by RRF, keeps `top_k`, and returns the usual hit plus `found_by`
+  (`vector`, `keyword` or both), `rrf` and `exact_match`. A chunk only BM25 found gets its cosine from
+  `chunk_index.cosine_for`, so the floor still applies; `hybrid.is_usable(hit, floor)` passes a hit whose cosine
+  reaches the floor **or** whose `exact_match` is true. It raises `RuntimeError` if a BM25 chunk is missing from the vector index.
+  **Nothing calls it**: the runners below score vector search only, so hybrid is built but unscored.
+  **Caveat before wiring it in:** `exact_match` counts any token containing a digit as an identifier. That suits
+  Firm Intelligence (matter references such as `LP-3307`) but this corpus has no such codes; its digit tokens are
+  years, dates, quarters and fund numbers. Three of the ten must-refuse questions (`q41`, `q42`, `q43`) contain
+  `2024` or `31`, so a chunk sharing that token would skip the floor and the question would reach Claude. Revisit
+  the rule (or the floor logic) before hybrid serves real questions. The eval set also has no exact-id or rare-term
+  questions, so it would not show hybrid's main strength.
+- **Running the comparison** (from `Asset Management - API/`, with `VOYAGE_API_KEY` set; the first run builds every
+  collection, so it is slow):
+  - `python -m Eval.eval_retrieval` builds all six indexes, embeds the 50 questions once and prints, per strategy,
+    recall@1, @3, @5, MRR, context words in the top 3, the mean best score for answerable and for unanswerable
+    questions (the gap guides the floor), recall@3 by question kind and the ids missed at k=3. It saves `eval_results/retrieval.json`.
+  - `python -m Eval.floor_preview` embeds the questions and, for `sections_contextual` (edit `STRATEGY` in the file
+    to change it; that collection must already be built), lists each question's best score and how many answerable
+    (bad) and unanswerable (good) questions each floor from 0.40 to 0.65 would refuse before any model call.
+  - `python -m Eval.eval_answers <strategy> [<strategy> ...] [--floor X]` (also needs `ANTHROPIC_API_KEY`) asks
+    Claude one question at a time with the strategy's top 3 chunks above the floor (default `config.RELEVANCE_FLOOR`),
+    then reports answer accuracy, refusal accuracy, false refusals, wrong or unrefused ids, calls and average input
+    tokens, and saves `eval_results/answers.json`. It makes up to 50 model calls per strategy, so run it on a shortlist.
+  - Both runners write `eval_results/` relative to the working directory, so run them from `Asset Management - API/`.
+    No results have been recorded yet; when they are, put the decision and the evidence in a short note under `Docs/`.
 - Facts to keep in mind when reading results: the longest section is 65 words, so the 150-word cap never
   splits one and the section strategies differ from `sentences_100` mainly by heading context; the
   `fixed_*` strategies produce tail chunks as short as 3 words.
-- `tests/test_chunking.py` (2 tests, offline) covers the strategies. `chunk_index.py`, `bm25.py`, `context.py`
-  and the eval set have no tests.
+- `tests/test_chunking.py` (2 tests, offline) covers the strategies and `tests/test_eval_set.py` (4 tests, offline)
+  checks the eval set against the documents: unique ids, each evidence span present, inside one section and
+  appearing once in the corpus, and keyword matching. `chunk_index.py`, `bm25.py`, `fusion.py`, `hybrid.py`
+  and `context.py` have no tests.
 
-**Not built:** a runner that embeds `EVAL_SET`, retrieves under each strategy and reports hit rate (does the
-expected `doc_id` appear in the top k) and the best score for each question; recorded floor scores;
-hybrid search; wiring any chunked index into `/insights/ask` or the agent.
+**Not done:** running any of the three runners, so no recall, floor scores or answer accuracy are recorded;
+scoring hybrid search; wiring any chunked index (hybrid or not) into `/knowledge/*`, `/insights/ask` or the
+agent. Firm Intelligence did that last step in its `knowledge_store.py` (a `CHUNK_STRATEGY` constant and a
+`SEARCH_MODE`). It would need chunk hits to carry `as_of_date` and `status`, which `routers/insights.build_context` prints.
+
+### 7.8 Azure AI Search (deferred)
+
+**Status: not built, deliberately ignored for now.** Firm Intelligence has an Azure AI Search backend that this
+project will adopt later. None of it is copied. What it does, so the port is quick:
+
+| Firm Intelligence file | Job |
+|---|---|
+| `azure_index.py` | Defines the index: key `chunk_key` (chunk id with `#` replaced by `_`), `chunk_id`, `doc_id`, `title`, `text`, and a 512-dimension `embedding` (the size `voyage-3-lite` produces) with HNSW cosine, plus a semantic configuration |
+| `azure_store.py` | `build_index(strategy)` drops and recreates the index and uploads every chunk with the vectors already in the local Chroma collection (no new embedding cost). `search_with_vector` runs keyword and vector search in one query (Azure fuses them with RRF), optionally the semantic reranker, and returns hits with `rerank_score` (0 to 4), `rrf` and `exact_match` |
+| `azure_build.py` | Entry point, `python -m azure_build` |
+| `settings.py` | `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_INDEX` (default `firm-chunks-v1`), `SEMANTIC_CONFIG`, `RERANK_FLOOR` (2.0), `AZURE_SEARCH_RULE` (the exact-match rule on or off) |
+| `gate.py` | `is_usable` that judges an Azure hit on its rerank score against `RERANK_FLOOR`, a local hit on its cosine against the cosine floor, and lets an exact match through |
+
+Where it would plug in: as a second backend behind `knowledge_store.search`, with the gate using the rerank floor
+for Azure hits. It needs the `azure-search-documents` and `azure-identity` packages (not in `requirements.txt`),
+an Azure AI Search service with the semantic ranker enabled, and `az login` for local sign-in. New config variables
+would go in section 3. The same exact-match caveat as in 7.7 applies to `AZURE_SEARCH_RULE`.
+
+**Problems seen in the firm code** (read from the source, never run against Azure, so confirm before relying on
+them) that should be fixed when porting rather than copied:
+
+- `azure_store.search_with_vector`: `search_client().search(search_texts=...)` should be `search_text`; the vector query names the field `embeddings` but the index field is `embedding`; `set*bm25.tokenize(...)` is a syntax error (`set(...)`); `settings.EXACT_MATCH_RULE` does not exist (`settings.py` defines `AZURE_SEARCH_RULE`).
+- `azure_store`: `SearchClient(..., credentials=...)` should be `credential=` (also in `SearchIndexClient`); `failed = [result for result in results if not results.succeeded]` should test `result.succeeded`.
+- `azure_index`: `SemanticField(filed_name=...)` is a typo for `field_name`; `SemanticPrioritizedFields` takes `title_field=` and `content_fields=` (a list), not `title_fields=` / `content_field=`.
+- `gate.py`: tests `hit.get("reranker_score")` but reads `hit["rerank_score"]`, so a rerank score is never used; the Azure hits store it as `rerank_score`.
 
 ---
 
@@ -1017,11 +1082,11 @@ or depend on the network in tests.
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 (covered for `/agent/ask`, `/insights/ask`, `/insights/client-fit` and both summaries) |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` (`test_client_fit.py`) |
 
-**Status:** 79 tests, all passing (run `python -m pytest` from `Asset Management - API/`; the venv is at the project root). Per file: `test_funds.py` 4,
-`test_clients.py` 14, `test_portfolio.py` 8, `test_llm.py` 8, `test_agent.py` 15, `test_fund_summary.py` 7, `test_portfolio_summary.py` 8, `test_client_fit.py` 12, `test_grounding.py` 4, `test_knowledge.py` 5, `test_chunking.py` 2.
-Nothing tests the eval set, the BM25 index, the chunk index or the context ordering (7.7).
+**Status:** 91 tests, all passing (run `python -m pytest` from `Asset Management - API/`; the venv is at the project root). Per file: `test_funds.py` 4,
+`test_clients.py` 14, `test_portfolio.py` 8, `test_llm.py` 8, `test_agent.py` 15, `test_fund_summary.py` 7, `test_portfolio_summary.py` 8, `test_client_fit.py` 12, `test_grounding.py` 4, `test_knowledge.py` 5, `test_chunking.py` 2, `test_eval_set.py` 4 (evidence in each document, unique ids, keyword matching; no mocks).
+Nothing tests the BM25 index, the chunk index, `fusion.py`, `hybrid.py` or the context ordering (7.7).
 The first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
-`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 87 pass in total with the files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
+`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 91 pass in total with the files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
 `llm.answer_from_context` replaced by `monkeypatch` fakes: below the floor refuses with zero model calls, a cited answer passes with only cited ids in `sources` and a labelled context,
 the model's refusal sentence is refused, a citation to an unretrieved id is refused, and an uncited sentence is flagged not refused.
 `test_agent.py` fakes `agent.client.messages.create` and covers: a plain answer, a tool call then an answer (token totals summed), a model that never stops
@@ -1078,7 +1143,7 @@ and the demo needs a real-model run of the agent, which has not happened yet (th
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
 | 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested, used by `/insights/client-fit` and the agent. No whole-portfolio endpoint or concentration rule (the agent checks a portfolio fund by fund) |
 | 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Partial: fund and portfolio summaries and `/insights/client-fit` built and tested with a fake model, not yet against real Claude. Streaming update (6.3) not built |
-| 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. The 50-question eval set (`Eval/eval_set.py`) and six chunking strategies (`Chunking/`) exist, but no runner scores them: floor scores not recorded, no chunking comparison, no advice check (7.7) |
+| 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. The 50-question eval set (`Eval/eval_set.py`) and six chunking strategies (`Chunking/`) exist, and runners to score them exist (`Eval/eval_retrieval.py`, `eval_answers.py`, `floor_preview.py`), but none has been run: floor scores not recorded, no chunking comparison, no advice check (7.7). Hybrid search is built (`Chunking/hybrid.py`) but not scored or wired in. Azure AI Search is deferred (7.8) |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Done against a fake model (`test_agent.py`). Not yet tried with the real model |
 | 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API | Not started |
 | 8 | Hardening, READMEs, design note, demo rehearsal | fresh checkout runs from the README | Not started |
@@ -1087,7 +1152,7 @@ and the demo needs a real-model run of the agent, which has not happened yet (th
 
 Chunk long documents with source ids in metadata (strategies built in `Chunking/`, not wired in); filter searches by document type or date via
 Chroma metadata; rerank results; stream the grounded answer; build an evaluation set of questions
-with expected source documents (built, `Eval/eval_set.py`) and report retrieval hit rate (not built); add authentication and rate
+with expected source documents (built, `Eval/eval_set.py`) and report retrieval hit rate (runner built in `Eval/eval_retrieval.py`, not yet run); Azure AI Search with a semantic reranker (7.8, deferred); add authentication and rate
 limiting; add a Dockerfile and compose file to run both projects.
 
 ---
@@ -1104,6 +1169,7 @@ limiting; add a Dockerfile and compose file to run both projects.
 - Embedding queries and documents with the same input type.
 - Duplicated documents after re-indexing (always upsert by id).
 - A floor chosen by guessing instead of measured scores.
+- Letting a digit-bearing token count as an "identifier" that skips the relevance floor (`hybrid.py` exact match) in a corpus where digits are years, dates and fund numbers (7.7).
 - Reading a passed citation check as proof the answer is grounded (it only proves the ids were supplied, section 7.6).
 - Computing a grounding result and never acting on it (a failed check must retry, refuse or flag).
 - Tests that call real services.

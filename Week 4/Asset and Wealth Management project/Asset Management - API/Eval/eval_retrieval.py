@@ -2,13 +2,13 @@
 This builds the score bored
 Score every chunking strategy against the eval set.
 
-build all 6 indexes -> embed the 32 questions -> search every index -> score -> print + save
+build all 6 indexes -> embed the 50 questions -> search every index -> score -> print + save
 """
 
 import json, statistics, Chunking.chunk_index as chunk_index, Chunking.chunking as chunking
 from pathlib import Path
-from eval_set import EVAL_SET
-from eval_tools import contains_evidence
+from Eval.eval_set import EVAL_SET
+from Eval.eval_tools import contains_evidence
 
 # Look at the top 1, top 3 and top 5 results
 K_VALUES = (1, 3, 5)

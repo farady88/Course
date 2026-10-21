@@ -1,6 +1,7 @@
 "Hybrid search: Vector search and Keyword search, merged by rank"
 
-import bm25, chunk_index, chunking, fusion
+from Chunking import bm25, chunk_index, chunking, fusion
+from Data.docs import DOCUMENT_LIST
 from functools import lru_cache
 
 POOL = 10
@@ -11,7 +12,7 @@ POOL = 10
 # keyword_index
 @lru_cache(maxsize = None)
 def keyword_index(strategy): 
-    return bm25.BM25Index(chunking.chunk_corpus(chunk_index.ALL_DOCUMENTS, strategy))
+    return bm25.BM25Index(chunking.chunk_corpus(DOCUMENT_LIST, strategy))
 
 
 # identifiers
@@ -51,7 +52,7 @@ def search_with_vector(strategy: str, question: str, query_vector: list[float], 
 
     unknown = [chunk_id for chunk_id in keyword_only if chunk_id not in extra_cosine]
     if unknown:
-        raise RuntimeError(f"{unknown[0]} is the keyword index but not in the vector index. Rebuild with POST /knowledge/index")
+        raise RuntimeError(f"{unknown[0]} is the keyword index but not in the vector index. Rebuild with chunk_index.build('{strategy}')")
 
 
     # find the numbers in the question (e.g 3307)
