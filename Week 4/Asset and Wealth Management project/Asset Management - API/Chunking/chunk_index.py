@@ -11,7 +11,9 @@ import hashlib, chromadb, config, Data.knowledge as knowledge, time
 from Chunking import chunking
 from Data.docs import DOCUMENT_LIST
 
-BATCH_SIZE = 128 # Voyages own guidance: batch documents to stay well inside rate limits
+BATCH_SIZE = 15 # ~3K tokens per request, so one request never exceeds the free tier's 10K TPM
+MIN_GAP = 25 # seconds between requests: under 3 RPM, and ~7K tokens/min
+_last_call = float("-inf")
 
 chroma = chromadb.PersistentClient(path=config.CHROMA_PATH)
 
@@ -25,15 +27,18 @@ def collection_for(strategy: str):
 
 def embed_batched(texts: list[str], input_type: str) -> tuple[list[list[float]], int]:
     "Embed any number of texts in batches. Return all vectors and the total token count"
+    global _last_call
     vectors : list[list[float]] = []
     tokens = 0
 
     for start in range(0, len(texts), BATCH_SIZE):
+        # shortcut: fixed gap for the free tier (3 RPM / 10K TPM), drop once billing is added
+        # Gap is measured from the last call, so it also spaces separate strategy builds.
+        time.sleep(max(0, MIN_GAP - (time.monotonic() - _last_call)))
+        _last_call = time.monotonic()
         batch_vectors, batch_tokens = knowledge.embedded_texts(texts[start:start + BATCH_SIZE], input_type=input_type)
         vectors.extend(batch_vectors)
         tokens += batch_tokens
-        # Free Voyage accounts are limited to roughly 3 requests per minute. This also spaces separate strategy builds.
-        time.sleep(22)
     return vectors, tokens
 
 # The fingerprint changes if the text, the model or the order changes. 
