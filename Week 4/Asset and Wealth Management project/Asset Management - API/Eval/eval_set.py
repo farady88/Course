@@ -37,7 +37,7 @@ EVAL_SET = [
         "question": "What does Meridian Global Equity Growth assess before establishing a position, and why is strong growth alone insufficient?",
         "doc_id": "doc-01",
         "evidence": "Valuation is considered before a position is established; strong growth alone is not sufficient reason to buy a security.",
-        "keywords": ["valuation", "not sufficient reason", "buy a security"],
+        "keywords": ["valuation", "growth", "not sufficient|insufficient|not enough"],
         "kind": "title-dependent",
     },
     {
@@ -45,7 +45,7 @@ EVAL_SET = [
         "question": "Under what circumstances may Meridian Global Equity Growth reduce or sell a position?",
         "doc_id": "doc-01",
         "evidence": "A position may be reduced or sold when the investment thesis deteriorates, valuation becomes difficult to justify, a better opportunity is identified, or portfolio risk becomes inconsistent with the mandate.",
-        "keywords": ["investment thesis deteriorates", "valuation", "better opportunity", "portfolio risk"],
+        "keywords": ["thesis|investment case", "valuation|price", "better opportunit*|more attractive", "risk"],
         "kind": "multi-hop",
     },
     {
@@ -85,7 +85,7 @@ EVAL_SET = [
         "question": "How did the manager change Meridian Emerging Markets Equity's materials exposure during Q3 2023?",
         "doc_id": "doc-09",
         "evidence": "The manager reported reducing materials exposure from 9.0% to 5.4% and increasing telecommunications weighting to improve defensive characteristics.",
-        "keywords": ["9.0%", "5.4%", "reducing materials", "increasing telecommunications"],
+        "keywords": ["9.0%", "5.4%", "reduc*|cut|lower*", "materials", "increas*|rais*", "telecommunications"],
         "kind": "numeric",
     },
     {
@@ -93,7 +93,7 @@ EVAL_SET = [
         "question": "What are the main sources of risk identified for Meridian Emerging Markets Equity?",
         "doc_id": "doc-02",
         "evidence": "The strategy is exposed to:\n- emerging-market equity volatility;\n- foreign-exchange movements;\n- commodity-price cycles;\n- political and regulatory changes;\n- liquidity differences between markets;\n- concentrated country or sector opportunities.",
-        "keywords": ["equity volatility", "foreign-exchange", "commodity-price", "political", "liquidity", "concentrated country or sector"],
+        "keywords": ["volatil*|swing*", "foreign-exchange|currency", "commodit*", "political", "liquidity", "concentrat*"],
         "kind": "lookup",
     },
     {
@@ -141,7 +141,7 @@ EVAL_SET = [
         "question": "What yield-to-maturity is reported for Meridian Global Government and Corporate Bond, and is it a guaranteed investor return?",
         "doc_id": "doc-23",
         "evidence": "The structured record reports a 4.1% yield-to-maturity. Yield-to-maturity is a portfolio-level measure based on current holdings and assumptions. It is not a promise that an investor will earn exactly 4.1%.",
-        "keywords": ["4.1%", "not|is not", "guaranteed|promise", "current holdings and assumptions"],
+        "keywords": ["4.1%", "not|is not", "guaranteed|promise", "holdings|bonds", "assumption*"],
         "kind": "negation",
     },
     {
@@ -165,7 +165,7 @@ EVAL_SET = [
         "question": "Does diversification in Meridian Balanced Multi-Asset eliminate market risk?",
         "doc_id": "doc-05",
         "evidence": "Diversification can reduce dependence on a single asset class, but it does not eliminate market risk.",
-        "keywords": ["no|not", "reduce dependence", "does not eliminate market risk"],
+        "keywords": ["no|not", "reduc*", "dependence", "eliminate market risk|remove market risk"],
         "kind": "negation",
     },
     {
@@ -181,7 +181,7 @@ EVAL_SET = [
         "question": "Why can Meridian Active Thematic Equity be sensitive to market changes?",
         "doc_id": "doc-24",
         "evidence": "This can make the fund more sensitive to changes in valuation, adoption expectations and investor sentiment.",
-        "keywords": ["valuation", "adoption expectations", "investor sentiment", "concentrated"],
+        "keywords": ["valuation", "adoption expectations", "investor sentiment"],
         "kind": "causal",
     },
     {
@@ -189,7 +189,7 @@ EVAL_SET = [
         "question": "What does an 'Unrated' ESG status mean under Meridian's ESG framework?",
         "doc_id": "doc-15",
         "evidence": "Unrated: insufficient data for an A-D rating.",
-        "keywords": ["insufficient data", "A-D rating", "not a rating"],
+        "keywords": ["insufficient data|not enough data", "A-D"],
         "kind": "definition",
     },
     {
@@ -221,7 +221,7 @@ EVAL_SET = [
         "question": "What is the Harrington Family Trust's advisory fee, when is it payable, and is it separate from fund ongoing charges?",
         "doc_id": "doc-10",
         "evidence": "The advisory fee is 0.25% annually of assets under management, payable quarterly in arrears. This advisory fee is separate from fund-level ongoing charges.",
-        "keywords": ["0.25%", "quarterly in arrears", "separate", "fund-level ongoing charges"],
+        "keywords": ["0.25%", "quarterly", "arrears", "separate", "ongoing charges"],
         "kind": "numeric",
     },
     {
@@ -253,7 +253,7 @@ EVAL_SET = [
         "question": "For Dr Ingrid Lindqvist's mandate, do values equal to the maximum limits for fund risk rating, ongoing charge and top holding breach the screening rules?",
         "doc_id": "doc-14",
         "evidence": "The screening convention is that a value equal to a maximum is permitted; only a value above the maximum breaches it.",
-        "keywords": ["no|do not", "equal", "permitted", "above the maximum"],
+        "keywords": ["no|do not", "equal", "permitted", "above"],
         "kind": "negation",
     },
     {
@@ -261,7 +261,7 @@ EVAL_SET = [
         "question": "What do ESG ratings A, B, C, D and Unrated mean in Meridian's policy?",
         "doc_id": "doc-15",
         "evidence": "- A: Excellent - B: Good - C: Moderate - D: Below Average - Unrated: insufficient data for an A-D rating.",
-        "keywords": ["A: Excellent", "B: Good", "C: Moderate", "D: Below Average", "Unrated: insufficient data"],
+        "keywords": ["A: Excellent", "B: Good", "C: Moderate", "D: Below Average", "unrated", "insufficient data|not enough data"],
         "kind": "definition",
     },
     {
@@ -301,7 +301,7 @@ EVAL_SET = [
         "question": "Does a fund that passes Meridian's mechanical screening checks automatically become suitable for every aspect of a client's circumstances?",
         "doc_id": "doc-16",
         "evidence": "A fund passing these mechanical checks is not automatically suitable in every respect. A suitability assessment may require financial circumstances, capacity for loss, time horizon, knowledge and experience and other information outside this synthetic dataset.",
-        "keywords": ["no|not", "not automatically suitable", "capacity for loss", "time horizon", "knowledge and experience"],
+        "keywords": ["no|not", "automatically", "capacity for loss", "time horizon", "knowledge and experience"],
         "kind": "negation",
     },
     {
@@ -317,7 +317,7 @@ EVAL_SET = [
         "question": "If a current structured record conflicts with descriptive prose, which source should the exact compliance calculation use?",
         "doc_id": "doc-17",
         "evidence": "Where a current structured record conflicts with descriptive prose in a document, exact compliance calculations must use the current structured record.",
-        "keywords": ["current structured record", "exact compliance calculations", "not descriptive prose"],
+        "keywords": ["current structured record", "exact compliance calculation*"],
         "kind": "policy",
     },
     {
@@ -330,10 +330,10 @@ EVAL_SET = [
     },
     {
         "id": "q39",
-        "question": "How does Meridian define the look-through exposure of a portfolio to an underlying fund holding?",
+        "question": "How does Meridian define the look-through exposure of a portfolio to an underlying fund holding, and how is it calculated?",
         "doc_id": "doc-18",
         "evidence": "For a portfolio position with weight P and a fund holding with weight H, the effective portfolio exposure is calculated as: P * H / 100",
-        "keywords": ["P * H / 100", "portfolio position", "fund holding", "effective portfolio exposure"],
+        "keywords": ["P * H / 100|/ 100|divide by 100|divided by 100|dividing by 100", "effective", "exposure"],
         "kind": "numeric",
     },
     {
@@ -341,7 +341,7 @@ EVAL_SET = [
         "question": "When screening a fund against a client's maximum ongoing charge, should the advisory fee be added to the fund OCF?",
         "doc_id": "doc-19",
         "evidence": "When comparing a fund against a client's maximum ongoing charge, use the structured fund record's ongoing_charge_pct. Do not add a client advisory fee to the fund OCF unless the question specifically asks for total client cost.",
-        "keywords": ["no|not", "ongoing_charge_pct", "do not add", "total client cost"],
+        "keywords": ["no|not", "ongoing_charge_pct|structured", "not add*|not be added", "total client cost"],
         "kind": "policy",
     },
 

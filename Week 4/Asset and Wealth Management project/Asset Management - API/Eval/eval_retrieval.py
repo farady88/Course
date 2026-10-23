@@ -1,5 +1,5 @@
 """
-This builds the score bored
+This builds the score board
 Score every chunking strategy against the eval set.
 
 build all 6 indexes -> embed the 50 questions -> search every index -> score -> print + save

@@ -17,7 +17,7 @@ def run(strategy: str, vectors: list[list[float]], floor: float) -> dict:
     # Top 3 chunks for every question
     ranked = chunk_index.search_with_vectors(strategy, vectors, k = 3)
     # Place to store results 
-    correct, false_refusals, wrong, tokens = [], [], [], []
+    correct, false_refusals, wrong, tokens, truncated = [], [], [], [], []
     for q, hits in zip(EVAL_SET, ranked):
         usable = [h for h in hits if h["score"] >= floor]
         # passes gate - build the context and ask model 
@@ -26,6 +26,9 @@ def run(strategy: str, vectors: list[list[float]], floor: float) -> dict:
             result = llm.answer_from_context(q["question"], context.build_context(usable))
             answer = result["answer"]
             tokens.append(result["input_tokens"])
+            # a cut-off answer is a measurement problem, not a wrong answer: report it separately
+            if result["stop_reason"] == "max_tokens":
+                truncated.append(q["id"])
         else:
             answer = None
         
@@ -44,6 +47,7 @@ def run(strategy: str, vectors: list[list[float]], floor: float) -> dict:
         "refusal_accuracy": round(statistics.mean(unanswerable), 3),
         "false_refusals": false_refusals,
         "wrong_or_unrefused": wrong,
+        "truncated": truncated,
         "model_calls": len(tokens),
         "avg_input_tokens": round(statistics.mean(tokens)) if tokens else 0,
     }
@@ -66,6 +70,7 @@ def main() -> None:
               f"{r['model_calls']:>7}{r['avg_input_tokens']:>15}")
         print(f"    false refusals: {', '.join(r['false_refusals']) or 'none'}")
         print(f"    wrong or not refused: {', '.join(r['wrong_or_unrefused']) or 'none'}")
+        print(f"    cut off at max_tokens: {', '.join(r['truncated']) or 'none'}")
 
     Path("eval_results").mkdir(exist_ok=True)
     Path("eval_results/answers.json").write_text(json.dumps({"floor": args.floor, **results}, indent=2))

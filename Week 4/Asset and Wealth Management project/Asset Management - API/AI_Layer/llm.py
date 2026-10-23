@@ -81,11 +81,19 @@ ASSESSMENT_TOOL = {
 }
 
 
+def text_of(response) -> str:
+    "First text block; Sonnet puts a thinking block before it, Haiku does not."
+    for b in response.content:
+        if b.type == "text":
+            return b.text
+    raise RuntimeError(f"Model returned no text (stop_reason={response.stop_reason})")
+
+
 def summarise_fund(fund: dict) -> dict:
     """Plain-English summary of one fund record, with token counts."""
     response = client.messages.create(
         model = MODEL,
-        max_tokens = 400,
+        max_tokens = 1500,  # thinking tokens (Sonnet) share this budget with the answer
         system = SUMMARY_SYSTEM_PROMPT,
         messages = [{
             "role": "user",
@@ -93,7 +101,7 @@ def summarise_fund(fund: dict) -> dict:
         }],
     )
     return {
-        "summary": response.content[0].text,
+        "summary": text_of(response),
         "input_tokens": response.usage.input_tokens,
         "output_tokens": response.usage.output_tokens,
     }
@@ -103,7 +111,7 @@ def summarise_portfolio(portfolio: dict, funds: list[dict]) -> dict:
     """Plain-English summary of one portfolio and the fund records it holds, with token counts."""
     response = client.messages.create(
         model = MODEL,
-        max_tokens = 600,
+        max_tokens = 2000,
         system = PORTFOLIO_SUMMARY_SYSTEM_PROMPT,
         messages = [{
             "role": "user",
@@ -114,7 +122,7 @@ def summarise_portfolio(portfolio: dict, funds: list[dict]) -> dict:
         }],
     )
     return {
-        "summary": response.content[0].text,
+        "summary": text_of(response),
         "input_tokens": response.usage.input_tokens,
         "output_tokens": response.usage.output_tokens,
     }
@@ -160,7 +168,7 @@ def answer_from_context(question: str, context: str) -> dict:
     """Answer strictly from retrieved context... The G in RAG"""
     response = client.messages.create(
         model = MODEL,
-        max_tokens = 500,
+        max_tokens = 2000,
         system = GROUNDED_SYSTEM_PROMPT,
         messages = [{
             "role": "user",
@@ -168,7 +176,7 @@ def answer_from_context(question: str, context: str) -> dict:
         }],
     )
     return {
-            "answer": response.content[0].text,
+            "answer": text_of(response),
             "input_tokens": response.usage.input_tokens,
             "output_tokens": response.usage.output_tokens,
             "stop_reason": response.stop_reason,

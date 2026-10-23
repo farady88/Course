@@ -79,3 +79,16 @@ def test_ask_maps_provider_errors(monkeypatch, error, status):
         raise error
     monkeypatch.setattr(llm, "answer_from_context", boom)
     assert ask().status_code == status
+
+
+def test_text_of_skips_thinking_block():
+    from types import SimpleNamespace as NS
+    thinking, text = NS(type="thinking"), NS(type="text", text="x")
+    assert llm.text_of(NS(content=[thinking, text])) == "x"
+    assert llm.text_of(NS(content=[text])) == "x"
+
+
+def test_text_of_raises_without_text_block():
+    from types import SimpleNamespace as NS
+    with pytest.raises(RuntimeError, match="max_tokens"):
+        llm.text_of(NS(content=[NS(type="thinking")], stop_reason="max_tokens"))

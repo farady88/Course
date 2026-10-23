@@ -12,11 +12,20 @@ def contains_evidence(chunk_text: str, evidence: str) -> bool:
 
 
 # alternative_matches
+def canon(text: str) -> str:
+    "Strip formatting (markdown, dashes, symbols) so a correct answer is not failed on how it is written"
+    text = text.lower().replace("’", "'").replace("–", "-").replace("—", "-").replace("×", "*").replace("÷", "/")
+    text = re.sub(r"n't\b", " not", text)
+    text = re.sub(r"(\d)\s+to\s+(\d)", r"\1-\2", text)
+    return " ".join(re.sub(r"[*_`|#\[\],:;]", " ", text).split())
+
+
 def alternative_matches(answer: str, alternative: str) -> bool:
+    # the trailing * marks a prefix match, so read it before canon strips asterisks
     prefix = alternative.endswith("*")
-    core = re.escape(alternative.rstrip("*").lower())
+    core = re.escape(canon(alternative.rstrip("*")))
     ending = "" if prefix else r"(?![a-z0-9])"
-    return re.search(rf"(?<![a-z0-9]){core}{ending}", answer.lower()) is not None
+    return re.search(rf"(?<![a-z0-9]){core}{ending}", canon(answer)) is not None
 
 
 # keywords_present
