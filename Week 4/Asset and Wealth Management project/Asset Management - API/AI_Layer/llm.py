@@ -37,6 +37,16 @@ so never quote or invent benchmark-relative performance. Explain the NAV trend q
 its risk and what it costs.
 """
 
+RISK_WARNING = "Investments can fall as well as rise, and you may get back less than you put in. Past performance is not a guide to the future."
+
+STREAM_SYSTEM_PROMPT = f"""
+{SUMMARY_SYSTEM_PROMPT}
+You are writing a client update. Use plain English and short sentences, and explain any jargon.
+Explain what the fund does, how it performed, what drives its risk and what it costs.
+Do not give personal investment advice. Make no promises and no forecasts of future returns.
+Always end with this exact line on its own: {RISK_WARNING}
+"""
+
 PORTFOLIO_SUMMARY_SYSTEM_PROMPT = f"""
 You write plain, client-friendly summaries of a single portfolio for portfolio managers and advisers.
 {GROUNDED_SYSTEM_PROMPT}
@@ -97,6 +107,20 @@ def summarise_fund(fund: dict) -> dict:
         "input_tokens": response.usage.input_tokens,
         "output_tokens": response.usage.output_tokens,
     }
+
+
+def stream_fund_update(fund: dict):
+    """Yield a client-friendly update of one fund as text chunks arrive."""
+    with client.messages.stream(
+        model = MODEL,
+        max_tokens = 2000,  # thinking tokens (Sonnet) share this budget; a cut-off update would lose its risk warning
+        system = STREAM_SYSTEM_PROMPT,
+        messages = [{
+            "role": "user",
+            "content": f"<fund>\n{json.dumps(fund, default=str)}\n</fund>\n\nWrite the client update for this fund.",
+        }],
+    ) as stream:
+        yield from stream.text_stream
 
 
 def summarise_portfolio(portfolio: dict, funds: list[dict]) -> dict:
