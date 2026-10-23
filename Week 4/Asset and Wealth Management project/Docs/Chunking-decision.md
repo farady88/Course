@@ -1,41 +1,72 @@
+# Chunking decision
 
-Relevance floor stats
+**Date:** 23/10/2026
 
-0.6 answerable refused: 0 of 40 | unanswerable refused: 2 of 10
-0.625 answerable refused: 0 of 40 | unanswerable refused: 2 of 10
-0.63 answerable refused: 0 of 40 | unanswerable refused: 3 of 10
-0.635 answerable refused: 0 of 40 | unanswerable refused: 3 of 10 
-0.65 answerable refused: 4 of 40 | unanswerable refused: 6 of 10
-0.675 answerable refused: 8 of 40 | unanswerable refused: 8 of 10
-0.685 answerable refused: 9 of 40 | unanswerable refused: 8 of 10
-0.7 answerable refused: 13 of 40 | unanswerable refused: 9 of 10
+**Decided by:** Faaruq
 
----
-R@1, R@3, R@5, MRR, ctx, ans & unans
+**Corpus:** `Data/docs.py` (25 documents)
 
-whole_document      R@1 0.9 R@3 1 R@5 1 MRR 0.95 ctx 582 ans 0.606 unans 0.546
-fixed_100            R@1 0.6 R@3 0.725 R@5 0.75 MRR 0.655 ctx 262 ans 0.631 unans 0.541
-fixed_overlap_25     R@1 0.725 R@3 0.925 R@5 0.95 MRR 0.815 ctx 258 ans 0.633 unans 0.543
-sentences_100        R@1 0.575 R@3 0.8 R@5 0.85 MRR 0.686 ctx 245 ans 0.629 unans 0.536
-sections_plain       R@1 0.55 R@3 0.65 R@5 0.725 MRR 0.609 ctx 77 ans 0.626 unans 0.503
-sections_contextual  R@1 0.825 R@3 0.975 R@5 1 MRR 0.898 ctx 117 ans 0.719 unans 0.627
+**Eval set:** `Eval/eval_set.py` (40 answerable, 10 unanswerable)
 
----
+**Embedding model:** voyage-3-lite
 
-Claude Haiku, 0.635 relevance floor 
+**Answer model:** Claude Haiku 4.5
 
-whole_document {'answer_accuracy': 0.35, 'refusal_accuracy': 1, 'false_refusals': ['q02', 'q03', 'q04', 'q06', 'q09', 'q10', 'q11', 'q12', 'q13', 'q17', 'q18', 'q20', 'q21', 'q22', 'q23', 'q24', 'q25', 'q28', 'q29', 'q32', 'q35', 'q36', 'q37', 'q38', 'q40'], 'wrong_or_unrefused': ['q08'], 'truncated': [], 'model_calls': 16, 'avg_input_tokens': 539}
+## Decision
+Serve `sections_contextual` with a relevance floor of `0.635`.
 
-sections_contextual {'answer_accuracy': 0.975, 'refusal_accuracy': 1, 'false_refusals': [], 'wrong_or_unrefused': ['q20'], 'truncated': [], 'model_calls': 47, 'avg_input_tokens': 334}
+## Evidence
+| Strategy | R@1 | R@3 | MRR | Context words@3 | Answer acc. | Refusal acc. | Avg tokens |
+|---|---|---|---|---|---|---|---|
+| whole_document | 0.90 | 1.00 | 0.95 | 582 | 0.35 | 1.00 | 539 |
+| sections_contextual | 0.83 | 0.98 | 0.90 | 117 | 0.98 | 1.00 | 334 |
+| fixed_overlap_25 | 0.73 | 0.93 | 0.82 | 258 | 0.38 | 1.00 | 378 |
 
-fixed_overlap_25 {'answer_accuracy': 0.375, 'refusal_accuracy': 1, 'false_refusals': ['q01', 'q02', 'q03', 'q06', 'q08', 'q09', 'q12', 'q13', 'q17', 'q18', 'q20', 'q21', 'q22', 'q23', 'q24', 'q25', 'q28', 'q29', 'q32', 'q33', 'q35', 'q36', 'q37', 'q38'], 'wrong_or_unrefused': ['q34'], 'truncated': [], 'model_calls': 18, 'avg_input_tokens': 378}
+Answer accuracy and tokens are from `Eval.eval_answers` at floor `0.635` (Haiku, one run). The other strategies
+scored lower on retrieval: `fixed_100` R@3 0.73, `sentences_100` 0.80, `sections_plain` 0.65.
 
----
+| Floor | Answerable refused (of 40) | Unanswerable refused (of 10) |
+|---|---|---|
+| 0.625 | 0 | 2 |
+| 0.635 | 0 | 3 |
+| 0.65 | 4 | 6 |
+| 0.675 | 8 | 8 |
+| 0.70 | 13 | 9 |
 
-The relevance floor finds it quite difficult to separate unanswerable questions because the questions in  my eval set which are labelled unanswerable are still relate heavily to some elements within the docs. 
+## Why this one
+`sections_contextual` finds the evidence in the top 3 for 97.5% of questions using 117 words of context, against
+100% for `whole_document` at 582 words (5x more). Prefixing each section with its document title and heading is what
+works: the same sections without it (`sections_plain`) reach only 0.65 R@3.
 
-I believe this makes my relevance floor even stronger because although it is only able to refuse 30% of the unanswerable questions, it is sure to refuse questions that are clearly unrelated and the model does a very good job of receiving the 70% of  unanswerable questions that pass the floor and refusing them.
+I chose `0.635` because it is the highest floor tested that refuses none of the 40 answerable questions. At `0.65`
+four of them (q06, q20, q38, q40) are refused before the model sees them. `whole_document` and `fixed_overlap_25` score
+low in the table only because their cosine scores sit below the same floor, so most of their questions are refused;
+they are not worse at answering.
 
----
+The floor refuses only 3 of the 10 unanswerable questions. My unanswerable questions are about topics the documents
+do cover (a fund's 2024 return, a maturity ladder), so their scores sit close to the answerable ones and no floor
+separates them cleanly. That is acceptable here: the floor removes clearly unrelated questions, and the grounded
+prompt makes the model refuse the other 7 (refusal accuracy is 1.00).
 
-Explain that after using multiple models and getting subpar answer accuracy results, I realized the models where not failing but my keyword guardrail in the eval set was too strict in a number of cases so I loosened the requirements so genuinely correct answers correctly pass the eval set.
+## Eval note
+My first answer-accuracy results, with Haiku and with Sonnet, were poor (0.48 to 0.70). Reading the answers showed the
+models were not failing: the keyword check in the eval set was too strict. It rejected correct answers that used
+different wording, formatting (bold, en dashes, `×`) or a paraphrase, and a few keywords were not in the evidence at all.
+I loosened those keywords so a correct answer passes, kept each one tied to the evidence text, and added tests so wrong
+answers still fail. Token limits were also raised after Sonnet answers were cut off.
+
+## Known weaknesses
+- q20 still fails: retrieval misses the evidence document (doc-24), and the model answers from doc-06 while citing it for
+  "investor sentiment", a phrase only doc-24 contains. I left that keyword strict on purpose.
+- The loosened keywords are weaker than the originals: a pass now means the answer has the facts, not the document's wording.
+- The floor was tuned on the same 50 questions it is scored on, with only 10 unanswerable, and the margin is thin
+  (`0.65` already refuses 4 answerable questions). Results come from single runs with no temperature control, so one
+  question either way is noise.
+- Hybrid (vector plus keyword) search is built but unscored.
+- Not live yet: `/insights/ask` and the agent still search the whole-document index, and `RELEVANCE_FLOOR` in `config.py`
+  is now `0.635`. On whole documents that floor refuses most questions (35% answer accuracy above), so serve the chunked
+  index before relying on it.
+
+## Revisit when
+A new document type, a new embedding model, or modified documents would require this decision to be revisited, as would
+adding hybrid search or a change to the eval set's keywords.

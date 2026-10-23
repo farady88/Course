@@ -26,13 +26,13 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
 | `POST /insights/ask`, refusal (7.4) | Built (partial) | In `routers/insights.py`, registered in `main.py` (the spec calls this `/knowledge/ask`). Retrieve, relevance floor (refuses without calling Claude), labelled context, Claude, grounding check, provider errors mapped to 429/504/502. Not built: advice/forecast check, floor tuning, retry |
 | Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` is now wired into `/insights/ask` and acted on (see 7.6). Direct tests of `check_citations` in `test_grounding.py`, plus the endpoint tests. Regex fixed to match ids of any length |
-| Evaluation set (7.7) | Built, runners not yet run | `Eval/eval_set.py`: 50 questions (40 answerable with expected `doc_id`, evidence and keywords; 10 that must be refused). Runners copied from Firm Intelligence and adapted: `eval_retrieval.py`, `eval_answers.py`, `floor_preview.py`, helpers in `eval_tools.py`. They have been run on Haiku and Sonnet (raw output in `Docs/Chunking-decision.md`), but the answer scores used a grader and token limit that under-counted correct answers; both are fixed (7.7) and the re-run is in `Docs/Chunking-decision.md` (`sections_contextual` 0.85 at floor 0.65, 0.925 with Haiku at 0.635), but the floor and the chunking choice are still undecided |
+| Evaluation set (7.7) | Built, runners not yet run | `Eval/eval_set.py`: 50 questions (40 answerable with expected `doc_id`, evidence and keywords; 10 that must be refused). Runners copied from Firm Intelligence and adapted: `eval_retrieval.py`, `eval_answers.py`, `floor_preview.py`, helpers in `eval_tools.py`. They have been run on Haiku and Sonnet (raw output in `Docs/Chunking-decision.md`), but the answer scores used a grader and token limit that under-counted correct answers; both are fixed (7.7) and the corrected results and the decision (`sections_contextual`, floor 0.635, 0.975 answer accuracy with Haiku) are in `Docs/Chunking-decision.md`; it is not wired into the API yet |
 | Chunking experiments (7.7) | Built, not wired in | `Chunking/`: six strategies, one Chroma collection per strategy, BM25, context ordering, plus `fusion.py` (RRF) and `hybrid.py` (vector + BM25 search). Nothing in the API calls it, and the eval runners score vector search only, so hybrid is unused. Strategy collections have been built and the retrieval and answer comparisons run (see 7.7), but hybrid is unscored. The production index still embeds whole documents |
 | Azure AI Search (7.8) | Deferred | Not ported. Firm Intelligence has a working design for it; see 7.8 for what it does and the problems to fix when it is added |
 | Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions. `check_fund` is served by `/insights/client-fit` and the agent's `check_mandate` tool |
 | Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check. The search tool's output omits each passage's as-of date and status |
 | Streamlit UI (section 10) | Not built | `Asset Management - UI/` does not exist yet |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_portfolio_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py`, `test_eval_set.py` (91 tests passed when last counted, before the `text_of` and extra eval-set tests were added; the full suite has not been re-run since (it could not be collected in the environment used for this change), but `test_eval_set.py` and `test_chunking.py` pass offline, 11 tests, with `--noconftest`; run from `Asset Management - API/`; `test_eval_set.py` checks the eval set against the documents, and nothing tests `bm25.py`, `chunk_index.py`, `fusion.py`, `hybrid.py` or `context.py`); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_fund_summary.py`, `test_portfolio_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_portfolio_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py`, `test_eval_set.py` (98 tests pass in total, run from `Asset Management - API/` with the project `.venv` (section 11); `test_eval_set.py` checks the eval set against the documents, and nothing tests `bm25.py`, `chunk_index.py`, `fusion.py`, `hybrid.py` or `context.py`); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_fund_summary.py`, `test_portfolio_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -60,9 +60,10 @@ arithmetic or decides compliance by itself.
 ## 2. Architecture
 
 Two separate projects, intended to have their own virtual environment and `requirements.txt`.
-Today only the API exists: the `Asset Management - UI/` folder has not been created, and a single
-`requirements.txt` and `.venv` at the project root (next to the API folder) cover the API (FastAPI, uvicorn, httpx, pydantic, pytest, mypy, ruff, chromadb,
-voyageai, anthropic). It has no Streamlit.
+Today only the API has code. The `Asset Management - UI/` folder exists with its own `.venv` (Streamlit) but no app and no
+`requirements.txt` yet. A single `requirements.txt` and `.venv` at the project root (next to the API folder) cover the API (FastAPI,
+uvicorn, httpx, pydantic, pytest, mypy, ruff, chromadb, voyageai, anthropic) and have no Streamlit. The two must stay in separate
+environments: Streamlit needs Starlette 0.46 or later, FastAPI 0.115.6 needs Starlette below 0.42.
 
 ```
 Asset Management - API/    FastAPI backend: records, LLM features, vector search, agent
@@ -785,13 +786,13 @@ ignores sentences under three words. `llm.py` imports the module
 
 ### 7.7 Evaluation set and chunking experiments
 
-**Status: the runners have been run on Haiku and on Sonnet 5.5, but the answer scores are not yet trustworthy.**
+**Status: the runners have been run, and the decision is written in `Docs/Chunking-decision.md`: serve
+`sections_contextual` with a relevance floor of 0.635. It is not wired into the API yet (see "Not done" below).**
 Two folders under `Asset Management - API/` exist to answer two open questions: where the relevance floor should
-sit (7.4) and whether chunking beats whole-document embedding (7.2). Raw output from the runs is in
-`Docs/Chunking-decision.md`. Retrieval: `sections_contextual` found the evidence in the top 3 for 97.5% of the
+sit (7.4) and whether chunking beats whole-document embedding (7.2). Retrieval: `sections_contextual` found the evidence in the top 3 for 97.5% of the
 answerable questions (MRR 0.898) with 117 words of context, against 100% and 582 words for `whole_document`.
-Answer accuracy was measured with a grader and a token limit that both turned out to under-count correct answers,
-so those numbers are superseded by the fixes below; the re-run after the fixes is summarised under "Results after the fixes". Hybrid search is still unscored.
+Early answer accuracy was measured with a grader and a token limit that both under-counted correct answers; the fixes
+are below and the note holds the corrected results. Hybrid search is still unscored.
 
 **Evaluation set** (`Eval/eval_set.py`). `EVAL_SET` is a list of 50 dicts, `q01` to `q50`, each with `id`,
 `question`, `doc_id`, `evidence`, `keywords` and `kind`. The module also holds `EVAL_SET_SUMMARY` (counts;
@@ -884,7 +885,7 @@ Conventions a runner must follow:
     then reports answer accuracy, refusal accuracy, false refusals, wrong or unrefused ids, ids cut off at `max_tokens`, calls and average input
     tokens, and saves `eval_results/answers.json`. It makes up to 50 model calls per strategy, so run it on a shortlist.
   - Both runners write `eval_results/` relative to the working directory, so run them from `Asset Management - API/`.
-    Results so far are in `Docs/Chunking-decision.md` as raw output; the decision itself is not written yet.
+    The results and the decision are in `Docs/Chunking-decision.md`.
 - Facts to keep in mind when reading results: the longest section is 65 words, so the 150-word cap never
   splits one and the section strategies differ from `sentences_100` mainly by heading context; the
   `fixed_*` strategies produce tail chunks as short as 3 words.
@@ -946,19 +947,19 @@ concentration) rather than doc-24, which holds the evidence, and said "investor 
 doc-06, which does not contain that phrase (it is only in doc-24). That is a retrieval miss plus a claim its
 cited source does not support, so it should stay a failure.
 
-**Results after the fixes** (raw output in `Docs/Chunking-decision.md`). `sections_contextual` scored 0.85 at floor
-0.65 with both Haiku and Sonnet (different questions failed: Sonnet q33 and q35, Haiku q33 and q39), and 0.925 with
-Haiku at floor 0.635, where no answerable question was refused and all 10 unanswerable ones were still refused.
-The 0.70 to 0.85 change for Haiku at 0.65 is entirely the eval fixes: same calls, same context, same four floor
-refusals. `whole_document` and `fixed_overlap_25` stay near 0.3 because their cosine scores sit below the shared
-floor (most questions are refused), not because their answers are poor, so they cannot be ranked this way. Two
-runs of the same Haiku 0.635 setting gave different `whole_document` and `fixed_overlap_25` scores (0.35 and 0.325,
-then 0.325 and 0.3) while `sections_contextual` stayed at 0.925: single runs are noisy and should be repeated.
-Ten unanswerable questions are a thin basis for a refusal rate.
+**Results after the fixes** (final table in `Docs/Chunking-decision.md`). With Haiku at floor 0.635, `sections_contextual`
+scored 0.975 (only q20 fails), no answerable question was refused, and all 10 unanswerable ones were refused (3 by the
+floor, 7 by the model). Earlier runs, not recorded in the note: at floor 0.65 it scored 0.85 with both Haiku and Sonnet
+(Haiku moved from 0.70 to 0.85 with the same calls, context and floor refusals, so that gain was entirely the eval fixes),
+and 0.925 with Haiku at 0.635 before the q35, q39 and q40 keywords were loosened. `whole_document` and `fixed_overlap_25`
+stay near 0.35 because their cosine scores sit below the shared floor (most questions are refused), not because their answers
+are poor, so they cannot be ranked this way. Repeated runs of the same setting moved those two by a few points while
+`sections_contextual` held steady: single runs are noisy and should be repeated. Ten unanswerable questions are a thin basis
+for a refusal rate.
 
-**Not done:** a decision on the relevance floor (at 0.65 the four answerable questions q06, q20, q38 and q40 never
-reach the model; 0.635 fixes that on this set only) and a repeat-run average;
-scoring hybrid search; wiring any chunked index (hybrid or not) into `/knowledge/*`, `/insights/ask` or the
+**Not done:** a repeat-run average; scoring hybrid search; `config.RELEVANCE_FLOOR` is already 0.635 but `/insights/ask`
+and the agent still search the whole-document index, where that floor refuses most questions, so serving the chunked index
+has to come with it; wiring any chunked index (hybrid or not) into `/knowledge/*`, `/insights/ask` or the
 agent. Firm Intelligence did that last step in its `knowledge_store.py` (a `CHUNK_STRATEGY` constant and a
 `SEARCH_MODE`). It would need chunk hits to carry `as_of_date` and `status`, which `routers/insights.build_context` prints.
 
@@ -1183,11 +1184,15 @@ or depend on the network in tests.
 | Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 (covered for `/agent/ask`, `/insights/ask`, `/insights/client-fit` and both summaries) |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` (`test_client_fit.py`) |
 
-**Status:** 91 tests, all passing (run `python -m pytest` from `Asset Management - API/`; the venv is at the project root). Per file: `test_funds.py` 4,
-`test_clients.py` 14, `test_portfolio.py` 8, `test_llm.py` 8, `test_agent.py` 15, `test_fund_summary.py` 7, `test_portfolio_summary.py` 8, `test_client_fit.py` 12, `test_grounding.py` 4, `test_knowledge.py` 5, `test_chunking.py` 2, `test_eval_set.py` 4 (evidence in each document, unique ids, keyword matching; no mocks).
+**Status:** 98 tests, all passing. Run `python -m pytest` from the project root or from `Asset Management - API/`, in the project-root `.venv`
+or in a global Python whose FastAPI and Starlette match (all three were checked). FastAPI 0.115.6 needs Starlette below 0.42; with a newer one
+(the global Python once had 1.9.0, pulled in when the UI's `streamlit` was installed without its venv) importing the app fails with
+`Router.__init__() got an unexpected keyword argument 'on_startup'`. `tests/conftest.py` now stops with a clear message in that case; fix it with
+`pip install starlette==0.41.3`. Per file: `test_funds.py` 4,
+`test_clients.py` 14, `test_portfolio.py` 8, `test_llm.py` 10, `test_agent.py` 15, `test_fund_summary.py` 7, `test_portfolio_summary.py` 8, `test_client_fit.py` 12, `test_grounding.py` 4, `test_knowledge.py` 5, `test_chunking.py` 2, `test_eval_set.py` 9 (evidence in each document, unique ids, keyword matching and its leniency limits; no mocks).
 Nothing tests the BM25 index, the chunk index, `fusion.py`, `hybrid.py` or the context ordering (7.7).
 The first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
-`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 91 pass in total with the files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
+`test_llm.py` (10 tests) and `test_agent.py` (15 tests; 98 pass in total with the files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
 `llm.answer_from_context` replaced by `monkeypatch` fakes: below the floor refuses with zero model calls, a cited answer passes with only cited ids in `sources` and a labelled context,
 the model's refusal sentence is refused, a citation to an unretrieved id is refused, and an uncited sentence is flagged not refused.
 `test_agent.py` fakes `agent.client.messages.create` and covers: a plain answer, a tool call then an answer (token totals summed), a model that never stops
@@ -1275,5 +1280,6 @@ limiting; add a Dockerfile and compose file to run both projects.
 - Computing a grounding result and never acting on it (a failed check must retry, refuse or flag).
 - Tests that call real services.
 - Streaming endpoints that can only report errors as 200 responses (validate before streaming).
+- Installing a package without activating its venv. The UI's `streamlit` went into the global Python and pulled in Starlette 1.9.0, which broke the global FastAPI 0.115.6 (needs Starlette below 0.42) and made `pytest` fail at collection. Install UI packages only inside the UI venv; check `python -c "import sys; print(sys.executable)"` before any `pip install`. Repair: `pip install starlette==0.41.3` and `pip uninstall streamlit` in the global Python. Setting the environment variable `PIP_REQUIRE_VIRTUALENV=true` makes pip refuse global installs.
 - Reading `response.content[0].text`: a model that thinks (Sonnet 5.5) puts a `thinking` block first. Select the block by type (`llm.text_of`, 6.6), and leave `max_tokens` room for thinking.
 - Grading a paraphrasing model with exact-phrase keywords, or with keywords that are not in the evidence; a lower score from a stronger model is a cue to read the answers before trusting the number (7.7).
