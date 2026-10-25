@@ -47,7 +47,7 @@ def with_marker(first: str, chunks):
         yield first
         yield from chunks
     except Exception:
-        logging.getLogger(__name__).exception("Fund update stream failed mid-stream")
+        logging.getLogger(__name__).exception("Update stream failed mid-stream")
         yield STREAM_INTERRUPTED
 
 

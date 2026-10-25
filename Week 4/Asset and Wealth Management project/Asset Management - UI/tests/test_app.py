@@ -28,6 +28,7 @@ def api(monkeypatch):
     routes = {
         ("GET", "/funds"): (200, [FUND]),
         ("GET", "/clients"): (200, [CLIENT]),
+        ("GET", "/portfolios"): (200, [{"portfolio_id": 1, "positions": [{"fund_id": 1, "weight_pct": 50.0}]}]),
         ("POST", "/knowledge/search"): (200, {"results": [HIT]}),
     }
 
@@ -87,6 +88,32 @@ def test_refusal_is_an_info_message_not_an_error(api):
     at.text_input[0].set_value("something unrelated")
     click(at, "Ask")
     assert "declined" in at.info[0].value and not at.error
+
+
+@pytest.mark.parametrize("button,path", [
+    ("Get fund summary", "/funds/1/summary/stream"),
+    ("Get portfolio summary", "/portfolios/1/summary/stream"),
+])
+def test_summary_streams_the_update_from_the_matching_endpoint(api, monkeypatch, button, path):
+    urls = []
+
+    class Streamed:
+        status_code = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def iter_text(self):
+            yield from ["A plain ", "update."]
+
+    monkeypatch.setattr(httpx, "stream", lambda method, url, timeout=None: urls.append(url) or Streamed())
+    at = click(run_app(), button)
+    assert not at.exception
+    assert urls == [f"http://127.0.0.1:8000{path}"]
+    assert any("A plain update." in m.value for m in at.markdown)
 
 
 def test_compare_needs_two_funds_then_shows_highlights_and_charts(api):

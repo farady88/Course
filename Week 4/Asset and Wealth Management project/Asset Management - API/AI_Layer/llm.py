@@ -57,6 +57,14 @@ Do not calculate blended, weighted or look-through figures: quote only the numbe
 Cover what the portfolio holds, how it is spread across funds, what drives its risk and what it costs.
 """
 
+PORTFOLIO_STREAM_SYSTEM_PROMPT = f"""
+{PORTFOLIO_SUMMARY_SYSTEM_PROMPT}
+You are writing a client update. Use plain English and short sentences, and explain any jargon.
+Explain what the portfolio holds, how it is spread across funds, what drives its risk and what it costs.
+Do not give personal investment advice. Make no promises and no forecasts of future returns.
+Always end with this exact line on its own: {RISK_WARNING}
+"""
+
 ASSESSMENT_SYSTEM_PROMPT = f"""
 You assess whether a fund fits a client's mandate and record the result with the record_assessment tool.
 {GROUNDED_SYSTEM_PROMPT}
@@ -118,6 +126,23 @@ def stream_fund_update(fund: dict):
         messages = [{
             "role": "user",
             "content": f"<fund>\n{json.dumps(fund, default=str)}\n</fund>\n\nWrite the client update for this fund.",
+        }],
+    ) as stream:
+        yield from stream.text_stream
+
+
+def stream_portfolio_update(portfolio: dict, funds: list[dict]):
+    """Yield a client-friendly update of one portfolio and the funds it holds as text chunks arrive."""
+    with client.messages.stream(
+        model = MODEL,
+        max_tokens = 2000,  # thinking tokens (Sonnet) share this budget; a cut-off update would lose its risk warning
+        system = PORTFOLIO_STREAM_SYSTEM_PROMPT,
+        messages = [{
+            "role": "user",
+            "content": (
+                f"<portfolio>\n{json.dumps(portfolio, default=str)}\n</portfolio>\n"
+                f"<funds>\n{json.dumps(funds, default=str)}\n</funds>\n\nWrite the client update for this portfolio."
+            ),
         }],
     ) as stream:
         yield from stream.text_stream

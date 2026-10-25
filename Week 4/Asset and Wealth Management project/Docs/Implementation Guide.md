@@ -19,9 +19,10 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | Funds (read-only), Clients, Portfolios | Built (partial) | list, get, create, update, delete as in 5.2. **No query filters** |
 | Error scheme (5.3) | Partial | 404, 400, 422 in the record routers. Every Claude-calling endpoint (`/insights/ask`, `/insights/client-fit`, `/agent/ask`, `/funds/{id}/summary`, `/portfolios/{id}/summary`) maps provider errors to 429/504/502 through `routers/errors.provider_errors`. No handler for Voyage or Chroma failures, no 500 mapping |
 | Configuration (section 3) | Built | `config.py` reads environment variables; no `.env.example` (see section 3) |
-| LLM features (section 6) | Partial | `AI_Layer/llm.py` holds the Anthropic client, `MODEL`, `GROUNDED_SYSTEM_PROMPT`, `answer_from_context` (7.4), `summarise_fund` (6.2), `summarise_portfolio` (6.2) and `assess_fit` with the `Breach` / `MandateFitAssessment` models (6.4). Not built: streaming (6.3), token estimate (6.5), `/insights/compare` (10.4). The 6.1 standing rules exist only in the agent prompt (no advice, no forecasts); the grounded, summary and client-fit prompts do not state them |
+| LLM features (section 6) | Partial | `AI_Layer/llm.py` holds the Anthropic client, `MODEL`, `GROUNDED_SYSTEM_PROMPT`, `answer_from_context` (7.4), `summarise_fund` (6.2), `summarise_portfolio` (6.2) and `assess_fit` with the `Breach` / `MandateFitAssessment` models (6.4). `stream_fund_update` and `stream_portfolio_update` (6.3). Not built: token estimate (6.5), `/insights/compare` (10.4). The 6.1 standing rules exist only in the agent prompt (no advice, no forecasts); the grounded, summary and client-fit prompts do not state them |
 | `GET /funds/{id}/summary` (6.2) | Built | In `routers/funds.py`. Fund record in the prompt, 404 before any model call, 429/504/502 mapped. Tested with a fake model only |
 | `GET /portfolios/{id}/summary` (6.2) | Built | In `routers/portfolio.py`. Portfolio record plus the records of the funds it holds in the prompt, 404 before any model call, 429/504/502 mapped. Tested with a fake model only |
+| `GET /funds/{id}/summary/stream`, `GET /portfolios/{id}/summary/stream` (6.3) | Built | In `routers/funds.py` and `routers/portfolio.py`; the portfolio route reuses `with_marker` from the fund router. First chunk read before responding so early failures get 404/429/504/502; a mid-stream failure ends the text with a marker. Tested with a fake stream only (`test_fund_stream.py`, `test_portfolio_stream.py`) |
 | `POST /insights/client-fit` (6.4) | Built | In `routers/insights.py`. Runs `mandate.check_fund`, then Claude via a forced tool call, validated, one retry then 502; a breach forces `fits = false`. Tested with a fake model only; never run against the real model |
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
 | `POST /insights/ask`, refusal (7.4) | Built (partial) | In `routers/insights.py`, registered in `main.py` (the spec calls this `/knowledge/ask`). Retrieve, relevance floor (refuses without calling Claude), labelled context, Claude, grounding check, provider errors mapped to 429/504/502. Not built: advice/forecast check, floor tuning, retry |
@@ -31,8 +32,8 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | Azure AI Search (7.8) | Deferred | Not ported. Firm Intelligence has a working design for it; see 7.8 for what it does and the problems to fix when it is added |
 | Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions. `check_fund` is served by `/insights/client-fit` and the agent's `check_mandate` tool |
 | Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check. The search tool's output omits each passage's as-of date and status |
-| Streamlit UI (section 10) | Not built | `Asset Management - UI/` does not exist yet |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_portfolio_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py`, `test_eval_set.py` (91 tests pass in total, run from `Asset Management - API/`; `test_eval_set.py` checks the eval set against the documents, and nothing tests `bm25.py`, `chunk_index.py`, `fusion.py`, `hybrid.py` or `context.py`); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_fund_summary.py`, `test_portfolio_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
+| Streamlit UI (section 10) | Built (partial) | `Asset Management - UI/app.py` has five tabs: Ask, Search, Summary, Compare, Client check. The Summary tab streams a fund update and a portfolio update (10.3). Not built: the "Explain the difference" button (10.4). Run with `streamlit run app.py` from inside the UI folder after activating its own `.venv` (`source .venv/Scripts/activate` in Git Bash). Tests: `Asset Management - UI/tests/test_app.py` (12 pass) |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_fund_stream.py`, `test_portfolio_stream.py`, `test_portfolio_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py`, `test_eval_set.py` (107 tests pass in total, run from `Asset Management - API/`; `test_eval_set.py` checks the eval set against the documents, and nothing tests `bm25.py`, `chunk_index.py`, `fusion.py`, `hybrid.py` or `context.py`); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_fund_summary.py`, `test_portfolio_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -465,11 +466,11 @@ Voyage or Chroma failures, and no 500.
 
 ## 6. LLM features
 
-**Status of section 6: partly built.** The fund and portfolio summary (6.2) and client-fit (6.4) endpoints exist. There is no streaming (6.3) or token-estimate (6.5) endpoint. `AI_Layer/llm.py` contains
+**Status of section 6: partly built.** The fund and portfolio summary (6.2) and client-fit (6.4) endpoints exist. The fund and portfolio streaming updates (6.3) exist too. There is no token-estimate (6.5) endpoint. `AI_Layer/llm.py` contains
 the Anthropic client, the model name, `GROUNDED_SYSTEM_PROMPT` (British English, client-friendly,
 use only the figures given, cite `[doc-NN]`, caveat dated or historical passages, use the exact refusal
 sentence, never invent facts) and `answer_from_context`, which serves the grounded answer in 7.4.
-There is no `STANDING_RULES` constant. The summary and client-fit prompts are built on top of `GROUNDED_SYSTEM_PROMPT`, so they inherit its rules (use only the given figures, never invent, British English, text between tags is data) and also its citation and refusal-sentence instructions, which make no sense when no documents are supplied. None of the three `llm.py` prompts says "no personal advice, no forecasts"; only the agent prompt does (9.5). The risk warning line belongs to the streaming update (6.3), not built.
+There is no `STANDING_RULES` constant. The summary and client-fit prompts are built on top of `GROUNDED_SYSTEM_PROMPT`, so they inherit its rules (use only the given figures, never invent, British English, text between tags is data) and also its citation and refusal-sentence instructions, which make no sense when no documents are supplied. None of the three `llm.py` prompts says "no personal advice, no forecasts"; only the agent prompt does (9.5). The risk warning line belongs to the streaming updates (6.3), whose prompts (`STREAM_SYSTEM_PROMPT`, `PORTFOLIO_STREAM_SYSTEM_PROMPT`) do state the no-advice and no-forecast rules.
 
 ### 6.1 Prompt design rules
 
@@ -509,6 +510,13 @@ holdings are top positions only and that no benchmark returns are supplied, so n
 
 Errors that occur before the first chunk return a proper status code. Errors mid-stream cannot
 change the status, so log them and end the stream with a visible marker.
+
+**Status: built** for funds and portfolios.
+
+- **Fund:** `GET /funds/{id}/summary/stream` in `routers/funds.py` (`summarise_stream`) and `llm.stream_fund_update`, with `STREAM_SYSTEM_PROMPT` (the fund summary prompt plus the client-update rules and the exact `RISK_WARNING` line).
+- **Portfolio:** `GET /portfolios/{id}/summary/stream` in `routers/portfolio.py` (`summarise_stream`) and `llm.stream_portfolio_update`, with `PORTFOLIO_STREAM_SYSTEM_PROMPT` (the portfolio summary prompt plus the same rules and warning). It is a copy of the fund route. The user message has `<portfolio>` and `<funds>` blocks, as in the non-streaming portfolio summary.
+- **Shared behaviour:** `max_tokens` 2000, because thinking tokens share the budget and a cut-off update would lose its risk warning. The first chunk is read inside `provider_errors()` before the `StreamingResponse` (`text/plain`) is returned. An unknown id is a 404 with no model call; provider errors before the first chunk map to 429/504/502. A mid-stream failure is logged and the text ends with `[Stream interrupted. This update is incomplete.]` (`with_marker`, defined in `routers/funds.py` and imported by the portfolio router). Plain `def`, not `async`.
+- **Tests:** `test_fund_stream.py` and `test_portfolio_stream.py` use a fake `client.messages.stream`. Never run against the real model.
 
 ### 6.4 Structured analysis
 
@@ -1044,6 +1052,13 @@ generic error with the status code.
 Pick a fund from a dropdown populated from `GET /funds`. Stream the client update into a
 placeholder as chunks arrive. Show API error statuses cleanly.
 
+**Status: built** in the Summary tab of `app.py`. The tab has two blocks that share one `stream_summary(path)` helper (`httpx.stream` into `st.write_stream`, errors shown through `api_errors`):
+
+- a Fund dropdown and "Get fund summary" button, which stream `GET /funds/{id}/summary/stream`;
+- a Portfolio dropdown (labelled "Portfolio {id}", from `GET /portfolios`) and "Get portfolio summary" button, which stream `GET /portfolios/{id}/summary/stream`.
+
+Tested in `test_app.py` with a fake `httpx.stream`, so the real stream has not been exercised from the UI in tests.
+
 ### 10.4 Fund comparison (the domain-specific feature)
 
 Choose two or more funds. Show side by side: strategy, risk rating, fee, ESG rating, top holdings,
@@ -1142,7 +1157,7 @@ and the demo needs a real-model run of the agent, which has not happened yet (th
 | 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass | Done, except the document integrity test (section 11) |
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
 | 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested, used by `/insights/client-fit` and the agent. No whole-portfolio endpoint or concentration rule (the agent checks a portfolio fund by fund) |
-| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Partial: fund and portfolio summaries and `/insights/client-fit` built and tested with a fake model, not yet against real Claude. Streaming update (6.3) not built |
+| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Partial: fund and portfolio summaries and `/insights/client-fit` built and tested with a fake model, not yet against real Claude. Streaming updates (6.3) for funds and portfolios built and tested with a fake stream, not yet against real Claude |
 | 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. The 50-question eval set (`Eval/eval_set.py`) and six chunking strategies (`Chunking/`) exist, and runners to score them exist (`Eval/eval_retrieval.py`, `eval_answers.py`, `floor_preview.py`), but none has been run: floor scores not recorded, no chunking comparison, no advice check (7.7). Hybrid search is built (`Chunking/hybrid.py`) but not scored or wired in. Azure AI Search is deferred (7.8) |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Done against a fake model (`test_agent.py`). Not yet tried with the real model |
 | 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API | Not started |

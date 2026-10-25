@@ -40,6 +40,16 @@ def call(method: str, path: str, timeout: float, messages: dict[int, str] | None
     return None
 
 
+def stream_summary(path: str):
+    "Stream a text update from the API into the page, showing any error the same way as call()."
+    with api_errors():
+        with httpx.stream("GET", f"{API_BASE_URL}{path}", timeout=60) as response:
+            if response.status_code != 200:
+                response.read()
+                response.raise_for_status()
+            st.write_stream(response.iter_text())
+
+
 @st.cache_data(ttl=60)
 def fetch_list(path: str) -> list[dict]:
     # Raises on failure, so a failed fetch is never cached.
@@ -120,15 +130,15 @@ with search_tab:
 funds = load("/funds")
 by_label = {fund_label(f): f for f in funds}
 
+portfolio_by_label = {f"Portfolio {p['portfolio_id']}": p for p in load("/portfolios")}
+
 with summary_tab:
     label = st.selectbox("Fund", list(by_label), key="summary_fund")
-    if st.button("Get summary") and label:
-        with api_errors():
-            with httpx.stream("GET", f"{API_BASE_URL}/funds/{by_label[label]['fund_id']}/summary/stream", timeout=60) as response:
-                if response.status_code != 200:
-                    response.read()
-                    response.raise_for_status()
-                st.write_stream(response.iter_text())
+    if st.button("Get fund summary") and label:
+        stream_summary(f"/funds/{by_label[label]['fund_id']}/summary/stream")
+    portfolio_label = st.selectbox("Portfolio", list(portfolio_by_label), key="summary_portfolio")
+    if st.button("Get portfolio summary") and portfolio_label:
+        stream_summary(f"/portfolios/{portfolio_by_label[portfolio_label]['portfolio_id']}/summary/stream")
 
 with compare_tab:
     chosen = [by_label[label] for label in st.multiselect("Choose two or more funds", list(by_label))]
