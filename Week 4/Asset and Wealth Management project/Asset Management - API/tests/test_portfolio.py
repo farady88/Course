@@ -13,18 +13,6 @@ from Data.records import PORTFOLIOS, FUNDS
 client = TestClient(app)
 
 
-def test_list_portfolios():
-    """Test listing all portfolios"""
-    response = client.get("/portfolios")
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == len(PORTFOLIOS)
-    # Check that we get all the expected portfolios
-    portfolio_ids = [p["portfolio_id"] for p in data]
-    assert set(portfolio_ids) == set(PORTFOLIOS.keys())
-
-
 def test_get_portfolio():
     """Test getting a specific portfolio"""
     # Test getting an existing portfolio

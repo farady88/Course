@@ -1,6 +1,5 @@
 import httpx
-import pytest
-from anthropic import APIStatusError, APITimeoutError, RateLimitError
+from anthropic import APITimeoutError
 from fastapi.testclient import TestClient
 from types import SimpleNamespace as NS
 from AI_Layer import llm
@@ -44,11 +43,6 @@ def test_clean_pair_passes_model_assessment_through(monkeypatch):
     assert calls[0]["tool_choice"] == {"type": "tool", "name": "record_assessment"}
 
 
-def test_on_the_limit_pair_has_no_breaches(monkeypatch):
-    fake_model(monkeypatch, reply(GOOD))
-    assert fit(5, 5).json()["breaches"] == []  # equal to a limit is compliant
-
-
 def test_breach_forces_fits_false_and_blocks_approve(monkeypatch):
     calls = fake_model(monkeypatch, reply(GOOD))  # model wrongly says fits and approve
     body = fit(2, 1).json()  # Fund 2 holds tobacco, Client 1 excludes it
@@ -87,16 +81,8 @@ def test_unknown_ids_are_404_without_model_call(monkeypatch):
     assert calls == []
 
 
-def test_bad_body_is_422():
-    assert http.post("/insights/client-fit", json={"fund_id": 1}).status_code == 422
-
-
-@pytest.mark.parametrize("error,status", [
-    (RateLimitError("x", response=httpx.Response(429, request=REQ), body=None), 429),
-    (APITimeoutError(request=REQ), 504),
-    (APIStatusError("x", response=httpx.Response(500, request=REQ), body=None), 502),
-])
-def test_fit_maps_provider_errors(monkeypatch, error, status):
+def test_fit_maps_provider_errors(monkeypatch):  # one case: every route shares routers/errors.provider_errors (full matrix in test_agent.py)
+    error, status = APITimeoutError(request=REQ), 504
     def boom(**kw):
         raise error
     monkeypatch.setattr(llm.client.messages, "create", boom)

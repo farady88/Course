@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from anthropic import APIStatusError, APITimeoutError, RateLimitError
+from anthropic import APITimeoutError
 from fastapi.testclient import TestClient
 import config
 from main import app
@@ -68,14 +68,23 @@ def test_uncited_sentence_is_flagged_not_refused(model):
     assert body["refused"] is False and body["grounding"]["passed"] is False
 
 
-@pytest.mark.parametrize("error,status", [
-    (RateLimitError("x", response=httpx.Response(429, request=REQ), body=None), 429),
-    (APITimeoutError(request=REQ), 504),
-    (APIStatusError("x", response=httpx.Response(500, request=REQ), body=None), 502),
-])
-def test_ask_maps_provider_errors(monkeypatch, error, status):
+def test_ask_maps_provider_errors(monkeypatch):  # one case: every route shares routers/errors.provider_errors (full matrix in test_agent.py)
+    error, status = APITimeoutError(request=REQ), 504
     monkeypatch.setattr(knowledge, "search", lambda question, top_k: [passage()])
     def boom(q, ctx):
         raise error
     monkeypatch.setattr(llm, "answer_from_context", boom)
     assert ask().status_code == status
+
+
+def test_text_of_skips_thinking_block():
+    from types import SimpleNamespace as NS
+    thinking, text = NS(type="thinking"), NS(type="text", text="x")
+    assert llm.text_of(NS(content=[thinking, text])) == "x"
+    assert llm.text_of(NS(content=[text])) == "x"
+
+
+def test_text_of_raises_without_text_block():
+    from types import SimpleNamespace as NS
+    with pytest.raises(RuntimeError, match="max_tokens"):
+        llm.text_of(NS(content=[NS(type="thinking")], stop_reason="max_tokens"))

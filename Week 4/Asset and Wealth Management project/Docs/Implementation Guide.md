@@ -17,18 +17,23 @@ Anything marked *Not built* is specification only. Each section below repeats it
 | Documents (`Data/docs.py`) | Built | 25 documents, ids `doc-01` to `doc-25`, `DOCUMENT_LIST` |
 | `/health` | Built (minimal) | returns `{"status": "Ok"}`, no index information |
 | Funds (read-only), Clients, Portfolios | Built (partial) | list, get, create, update, delete as in 5.2. **No query filters** |
-| Error scheme (5.3) | Partial | 404, 400, 422 in the record routers. Every Claude-calling endpoint (`/insights/ask`, `/insights/client-fit`, `/agent/ask`, `/funds/{id}/summary`) maps provider errors to 429/504/502 through `routers/errors.provider_errors`. No handler for Voyage or Chroma failures, no 500 mapping |
+| Error scheme (5.3) | Partial | 404, 400, 422 in the record routers. Every Claude-calling endpoint (`/insights/ask`, `/insights/client-fit`, `/agent/ask`, `/funds/{id}/summary`, `/portfolios/{id}/summary`) maps provider errors to 429/504/502 through `routers/errors.provider_errors`. No handler for Voyage or Chroma failures, no 500 mapping |
 | Configuration (section 3) | Built | `config.py` reads environment variables; no `.env.example` (see section 3) |
-| LLM features (section 6) | Partial | `AI_Layer/llm.py` holds the Anthropic client, `MODEL`, `GROUNDED_SYSTEM_PROMPT`, `answer_from_context` (7.4), `summarise_fund` (6.2) and `assess_fit` with the `Breach` / `MandateFitAssessment` models (6.4). Not built: streaming (6.3), token estimate (6.5), the standing rules in the grounded and agent prompts |
+| LLM features (section 6) | Partial | `AI_Layer/llm.py` holds the Anthropic client, `MODEL`, `GROUNDED_SYSTEM_PROMPT`, `answer_from_context` (7.4), `summarise_fund` (6.2), `summarise_portfolio` (6.2) and `assess_fit` with the `Breach` / `MandateFitAssessment` models (6.4). `stream_fund_update` and `stream_portfolio_update` (6.3). Answers are read with `text_of` and `max_tokens` leaves room for Sonnet's thinking (6.6); `assess_fit` is untested on Sonnet. Not built: token estimate (6.5), `/insights/compare` (10.4). The 6.1 standing rules exist only in the agent prompt (no advice, no forecasts); the grounded, summary and client-fit prompts do not state them |
 | `GET /funds/{id}/summary` (6.2) | Built | In `routers/funds.py`. Fund record in the prompt, 404 before any model call, 429/504/502 mapped. Tested with a fake model only |
+| `GET /portfolios/{id}/summary` (6.2) | Built | In `routers/portfolio.py`. Portfolio record plus the records of the funds it holds in the prompt, 404 before any model call, 429/504/502 mapped. Tested with a fake model only |
+| `GET /funds/{id}/summary/stream`, `GET /portfolios/{id}/summary/stream` (6.3) | Built | In `routers/funds.py` and `routers/portfolio.py`; the portfolio route reuses `with_marker` from the fund router. First chunk read before responding so early failures get 404/429/504/502; a mid-stream failure ends the text with a marker. Tested with a fake stream only (`test_fund_stream.py`, `test_portfolio_stream.py`) |
 | `POST /insights/client-fit` (6.4) | Built | In `routers/insights.py`. Runs `mandate.check_fund`, then Claude via a forced tool call, validated, one retry then 502; a breach forces `fits = false`. Tested with a fake model only; never run against the real model |
 | `POST /knowledge/index`, `POST /knowledge/search` | Built (partial) | Chroma + Voyage; see 7.2 and 7.3 for the differences |
 | `POST /insights/ask`, refusal (7.4) | Built (partial) | In `routers/insights.py`, registered in `main.py` (the spec calls this `/knowledge/ask`). Retrieve, relevance floor (refuses without calling Claude), labelled context, Claude, grounding check, provider errors mapped to 429/504/502. Not built: advice/forecast check, floor tuning, retry |
 | Grounding checks (7.6) | Partial | `AI_Layer/grounding.py` is now wired into `/insights/ask` and acted on (see 7.6). Direct tests of `check_citations` in `test_grounding.py`, plus the endpoint tests. Regex fixed to match ids of any length |
+| Evaluation set (7.7) | Built, runners not yet run | `Eval/eval_set.py`: 50 questions (40 answerable with expected `doc_id`, evidence and keywords; 10 that must be refused). Runners copied from Firm Intelligence and adapted: `eval_retrieval.py`, `eval_answers.py`, `floor_preview.py`, helpers in `eval_tools.py`. They have been run on Haiku and Sonnet (raw output in `Docs/Chunking-decision.md`), but the answer scores used a grader and token limit that under-counted correct answers; both are fixed (7.7) and the corrected results and the decision (`sections_contextual`, floor 0.635, 0.975 answer accuracy with Haiku) are in `Docs/Chunking-decision.md`; it is not wired into the API yet |
+| Chunking experiments (7.7) | Built, not wired in | `Chunking/`: six strategies, one Chroma collection per strategy, BM25, context ordering, plus `fusion.py` (RRF) and `hybrid.py` (vector + BM25 search). Nothing in the API calls it, and the eval runners score vector search only, so hybrid is unused. Strategy collections have been built and the retrieval and answer comparisons run (see 7.7), but hybrid is unscored. The production index still embeds whole documents |
+| Azure AI Search (7.8) | Deferred | Not ported. Firm Intelligence has a working design for it; see 7.8 for what it does and the problems to fix when it is added |
 | Mandate rules (section 8) | Built | `mandate.py`: `check_fund` (five rules) and `look_through_exposure`, pure functions. `check_fund` is served by `/insights/client-fit` and the agent's `check_mandate` tool |
-| Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check |
-| Streamlit UI (section 10) | Not built | `Asset Management - UI/` is an empty folder |
-| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py` (77 tests pass in total); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
+| Agent (section 9) | Built (partial) | `AI_Layer/agent.py` (`ask_with_tools`, `execute_tool`, tools `search_knowledge_base` and `check_mandate`) and `routers/agent.py` (`POST /agent/ask`, registered in `main.py`). Loop, safe execution, limit handling, provider errors mapped to 429/504/502. Never run against the real model; no `get_fund` tool by design (9.1). Not built: whole-portfolio concentration rule, agent-side advice check. The search tool's output omits each passage's as-of date and status |
+| Streamlit UI (section 10) | Built (partial) | `Asset Management - UI/app.py` has five tabs: Ask, Search, Summary, Compare, Client check. The Summary tab streams a fund update and a portfolio update (10.3). Not built: the "Explain the difference" button (10.4). Run with `streamlit run app.py` from inside the UI folder after activating its own `.venv` (`source .venv/Scripts/activate` in Git Bash). Tests: `Asset Management - UI/tests/test_app.py` (11 pass) |
+| Tests (section 11) | Partial | `test_funds.py`, `test_clients.py`, `test_portfolio.py`, `conftest.py`, `test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_fund_stream.py`, `test_portfolio_stream.py`, `test_portfolio_summary.py`, `test_client_fit.py`, `test_grounding.py`, `test_knowledge.py`, `test_chunking.py`, `test_eval_set.py` (82 tests pass in total, run from `Asset Management - API/`; `test_eval_set.py` checks the eval set against the documents, and nothing tests `bm25.py`, `chunk_index.py`, `fusion.py`, `hybrid.py` or `context.py`); the mandate tests call `mandate.py`; `test_llm.py` mocks retrieval and the model to test `/insights/ask`; `test_agent.py` fakes the model to test the agent loop, tools and `/agent/ask`; `test_fund_summary.py`, `test_portfolio_summary.py` and `test_client_fit.py` fake `llm.client.messages.create` |
 | READMEs, design note, demo (section 12) | Not built | |
 
 ---
@@ -56,9 +61,10 @@ arithmetic or decides compliance by itself.
 ## 2. Architecture
 
 Two separate projects, intended to have their own virtual environment and `requirements.txt`.
-Today only the API exists: `Asset Management - UI/` is empty, and a single `requirements.txt` at the
-repository root covers the API (FastAPI, uvicorn, httpx, pydantic, pytest, mypy, ruff, chromadb,
-voyageai, anthropic). It has no Streamlit.
+Today only the API has code. The `Asset Management - UI/` folder exists with its own `.venv` (Streamlit) but no app and no
+`requirements.txt` yet. A single `requirements.txt` and `.venv` at the project root (next to the API folder) cover the API (FastAPI,
+uvicorn, httpx, pydantic, pytest, mypy, ruff, chromadb, voyageai, anthropic) and have no Streamlit. The two must stay in separate
+environments: Streamlit needs Starlette 0.46 or later, FastAPI 0.115.6 needs Starlette below 0.42.
 
 ```
 Asset Management - API/    FastAPI backend: records, LLM features, vector search, agent
@@ -72,6 +78,7 @@ External services (all real, nothing mocked in the running system):
 | Claude (Anthropic API) | Summaries, structured analysis, grounded answers, agent reasoning |
 | Voyage AI | Turns text into embedding vectors |
 | Chroma | Persistent vector database on local disk |
+| Azure AI Search | Deferred, not used yet. Hosted keyword + vector search with a semantic reranker (7.8) |
 
 Request flow for a grounded question:
 
@@ -96,15 +103,16 @@ determined by deterministic screening"), meaning the mandate rules in section 8 
 
 ```
 records.py (FUNDS, CLIENTS, PORTFOLIOS)
-    -> routers (CRUD, filters, read-only funds)        structured lookups
+    -> routers (CRUD, read-only funds; filters not built)  structured lookups
     -> mandate.py (section 8), checked by the tests     compliance facts
-    -> llm.py (summary, streaming, client-fit)         record fields go into the prompt
+    -> llm.py (summary, client-fit; streaming not built)  record fields go into the prompt
+    -> /insights/client-fit (mandate result goes into the prompt)
     -> agent tool: check_mandate
 
 docs.py (DOCUMENTS)
-    -> knowledge_store.index: embed with Voyage (document type), upsert into Chroma
-    -> knowledge_store.search: embed query (query type), Chroma top k, score, floor
-    -> /knowledge/search, /insights/ask (refuse here, else Claude with retrieved text; spec name /knowledge/ask)
+    -> knowledge_store.build_index: embed with Voyage (document type), upsert into Chroma
+    -> knowledge_store.search: embed query (query type), Chroma top k, score (no floor here)
+    -> /knowledge/search (no floor), /insights/ask and the agent search tool (both apply the floor: refuse here, else Claude with retrieved text; spec name /knowledge/ask)
     -> agent tool: search_knowledge_base
 ```
 
@@ -141,7 +149,7 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **RAG (Retrieval-Augmented Generation)**
 - *What:* Retrieve relevant documents first, then give only those to the model to answer from.
-- *Here:* `/knowledge/ask` embeds the question, retrieves the top matches from Chroma, and asks Claude to answer using only those passages and to cite their ids. This keeps answers grounded and checkable.
+- *Here:* `/insights/ask` (the spec calls it `/knowledge/ask`) embeds the question, retrieves the top matches from Chroma, and asks Claude to answer using only those passages and to cite their ids. This keeps answers grounded and checkable.
 
 **Tool use and structured output**
 - *What:* Claude can be given tools with JSON schemas. It replies with a request to call one, and our code runs it. A tool schema can also force the reply into a fixed shape.
@@ -165,7 +173,7 @@ Each tool below has one job. Knowing which job makes it easier to see where a bu
 
 **pytest with mocking**
 - *What:* pytest runs the tests. Mocking swaps real services for fakes.
-- *Here:* Fake Claude and Voyage responses (via `monkeypatch`) keep tests free, fast and repeatable, and let us simulate a model that never stops. (`test_llm.py` and `test_agent.py` use them.)
+- *Here:* Fake Claude and Voyage responses (via `monkeypatch`) keep tests free, fast and repeatable, and let us simulate a model that never stops. (`test_llm.py`, `test_agent.py`, `test_fund_summary.py`, `test_client_fit.py` and `test_knowledge.py` use them.)
 
 ### API layout
 
@@ -179,16 +187,32 @@ Asset Management - API/
   Data/
     records.py            in-memory record store and seed data (SECTORS, FUNDS, CLIENTS, PORTFOLIOS)
     docs.py               the 25 source documents (DOCUMENTS dict and DOCUMENT_LIST for the knowledge base)
-    knowledge.py          Voyage client and `embedded_texts`, plus an older in-memory index (build_index,
-                          search, cosine_similarity) that the API does not use
-    knowledge_store.py    Chroma + Voyage: build_index, search, count
+    knowledge.py          Voyage client and `embedded_texts` (used), plus an older in-memory index (build_index,
+                          search, cosine_similarity) that the API does not use and that is broken: it loops over
+                          the DOCUMENTS dict as if it were a list and `search` reads keys it never stored.
+                          Delete it, or fix it, before anyone calls it
+    knowledge_store.py    Chroma + Voyage: build_index, search, count. Opens the Chroma store at import
   AI_Layer/
-    llm.py                Anthropic client, MODEL, prompts, answer_from_context, summarise_fund, assess_fit, Breach, MandateFitAssessment
+    llm.py                Anthropic client, MODEL, prompts, answer_from_context, summarise_fund, summarise_portfolio, assess_fit, Breach, MandateFitAssessment
     agent.py              tool-use loop: ask_with_tools, execute_tool, the two tool schemas (section 9)
     grounding.py          pure citation checks (7.6)
+  Chunking/               chunking experiments (7.7). Not used by the API. Run as `python -m Chunking.<module>` from this folder
+    chunking.py           six strategies and `chunk_corpus`
+    chunk_index.py        one Chroma collection per strategy: build, search_with_vectors, cosine_for
+    bm25.py               hand-written BM25 keyword index over the same chunks
+    context.py            order_for_context (U-shape) and build_context for chunk hits
+    fusion.py             reciprocal_rank_fusion: merges ranked id lists (used by hybrid.py)
+    hybrid.py             search_with_vector: vector + BM25 merged by RRF, found_by / exact_match / rrf on each hit, is_usable gate. Not called by anything yet
+  Eval/                   run as `python -m Eval.<module>` from this folder
+    eval_set.py           EVAL_SET (50 questions), EVAL_SET_SUMMARY, RESEARCH_SOURCES, answerable(), unanswerable() (7.7)
+    eval_tools.py         contains_evidence, keywords_present (pure scoring helpers)
+    eval_retrieval.py     scores every strategy: recall@1/3/5, MRR, context words, top scores, missed@3 (7.7)
+    eval_answers.py       asks Claude with each strategy's top 3 chunks and scores the answers (7.7)
+    floor_preview.py      best score per question and what each floor would refuse (7.7)
   routers/
     funds.py              also GET /funds/{id}/summary (6.2)
-    clients.py  portfolio.py  knowledge.py
+    portfolio.py          also GET /portfolios/{id}/summary (6.2)
+    clients.py  knowledge.py
     errors.py             provider_errors(): Anthropic errors to 429/504/502 (used by every router that calls Claude)
     agent.py              POST /agent/ask (section 9): runs ask_with_tools, maps provider errors
     insights.py           POST /insights/ask (7.4): retrieve, floor, context, Claude, grounding check; POST /insights/client-fit (6.4)
@@ -198,17 +222,24 @@ Asset Management - API/
     test_portfolio.py     portfolio CRUD and validation, seed portfolios, look-through exposure (calls mandate.look_through_exposure)
     test_llm.py           /insights/ask with retrieval and the model mocked (floor, citations, refusals)
     test_agent.py         agent loop with a fake model, both tools, safe execution, /agent/ask status mapping
-    test_summary.py       /funds/{id}/summary with a fake model: tokens, prompt caveats, 404, error mapping
+    test_fund_summary.py       /funds/{id}/summary with a fake model: tokens, prompt caveats, 404, error mapping
+    test_portfolio_summary.py  /portfolios/{id}/summary with a fake model: tokens, held funds and cash in the prompt, caveats, 404, error mapping
     test_client_fit.py    /insights/client-fit with a fake model: forced fits=false, retry, 502, 404, error mapping
     test_grounding.py     check_citations called directly: refusal, cited answer, uncited sentence, trailing citation
-    test_knowledge.py     /knowledge/index and /knowledge/search with the store faked: count and tokens, 409 before indexing, top_k bound; 422 on a short question
-    conftest.py           restores CLIENTS and PORTFOLIOS after every test
-requirements.txt          at the repository root, not inside the API folder
-Asset Management - UI/    empty
+    test_knowledge.py     /knowledge/index and /knowledge/search with the store faked: count and tokens, 409 when the fake raises, top_k bound; 422 on a short question
+    test_eval_set.py      eval set against the documents: unique ids, evidence present, in one section and unique in the corpus; keyword matching is whole-word and refusal-aware
+    test_chunking.py      every strategy on the real corpus, offline: unique non-empty chunks, no text lost, title-only prefix before the first heading
+    conftest.py           sets placeholder API keys, restores CLIENTS and PORTFOLIOS after every test
+  chroma_store/           the persistent index (CHROMA_PATH, 25 documents indexed). Committed to git
+requirements.txt          at the project root, not inside the API folder (so is the .venv)
+chroma_store/             stray: CHROMA_PATH is relative to the working directory, so an empty
+                          store appears at the project root, and in tests/, when the server or pytest starts there
+Docs/                     this guide, the project brief, the application overview (.docx)
+Asset Management - UI/    does not exist yet
 ```
 
 Still to create: `models.py`,
-the UI's `app.py` and both READMEs. Request models live inside each router file, and `Breach` / `MandateFitAssessment` live in `llm.py`.
+the UI folder with its `app.py`, and both READMEs. Request models live inside each router file, and `Breach` / `MandateFitAssessment` live in `llm.py`.
 
 Keep business logic (`AI_Layer/agent.py`, `llm.py`) free of FastAPI imports so it can be
 tested directly. Routers only translate HTTP to function calls and errors to status codes.
@@ -232,11 +263,13 @@ All configuration comes from environment variables. No secrets in code. This pro
 Load them in one `config.py` and fail fast with a clear message if a required key is missing.
 
 **Status: built** as `Asset Management - API/config.py`. It reads every variable above from the
-environment, with the defaults shown (`voyage-3-lite`, `./chroma_store`, floor 0.425, 5 iterations, 120
-days), and `require(name)` raises a clear `RuntimeError` for a missing key. No secret is stored in
+environment, with the defaults shown (`claude-haiku-4-5-20251001`, `voyage-3-lite`, `./chroma_store`, floor 0.425, 5
+iterations), and `require(name)` raises a clear `RuntimeError` for a missing key. No secret is stored in
 code. `AI_Layer/llm.py` requires `ANTHROPIC_API_KEY` and `Data/knowledge.py` requires `VOYAGE_API_KEY`,
 each at import, so starting the server needs `VOYAGE_API_KEY` set in that terminal. The tests do not:
-`conftest.py` sets placeholder keys. `AGENT_MAX_ITERATIONS` is used by the agent loop. The client timeouts (Anthropic 50 s, Voyage 3 s) and retry counts are still
+`conftest.py` sets placeholder keys. `AGENT_MAX_ITERATIONS` is used by the agent loop. `CHROMA_PATH` is
+relative, so it resolves from wherever the process starts: start the server and run the tests from
+`Asset Management - API/`, or you will get a second, empty store. The client timeouts (Anthropic 50 s, Voyage 3 s) and retry counts are still
 hard-coded in their modules. There is no `.env.example` (you set keys by hand per terminal).
 
 ---
@@ -386,6 +419,7 @@ For clients and portfolios, implement full CRUD operations. For funds, portfolio
 | POST | `/portfolios` | create, validated by Pydantic, returns 200 with the new record |
 | GET | `/portfolios` | list, with filters |
 | GET | `/portfolios/{id}` | one record, 404 if absent |
+| GET | `/portfolios/{id}/summary` | plain summary of the portfolio and its funds with token counts (6.2), 404 if absent |
 | PUT | `/portfolios/{id}` | update, 404 if absent |
 | DELETE | `/portfolios/{id}` | delete, returns 200 with the deleted record, 404 if absent |
 
@@ -433,12 +467,11 @@ Voyage or Chroma failures, and no 500.
 
 ## 6. LLM features
 
-**Status of section 6: partly built.** The summary (6.2) and client-fit (6.4) endpoints exist. There is no streaming (6.3) or token-estimate (6.5) endpoint. `AI_Layer/llm.py` contains
+**Status of section 6: partly built.** The fund and portfolio summary (6.2) and client-fit (6.4) endpoints exist. The fund and portfolio streaming updates (6.3) exist too. There is no token-estimate (6.5) endpoint. `AI_Layer/llm.py` contains
 the Anthropic client, the model name, `GROUNDED_SYSTEM_PROMPT` (British English, client-friendly,
 use only the figures given, cite `[doc-NN]`, caveat dated or historical passages, use the exact refusal
 sentence, never invent facts) and `answer_from_context`, which serves the grounded answer in 7.4.
-The standing rules in 6.1 (`STANDING_RULES`) are in the summary and client-fit prompts only, not yet in the grounded-answer or agent prompts. The risk warning line belongs to the streaming update (6.3), not built.
-The earlier broken grounding import is fixed (`import AI_Layer.grounding`), so `llm.py` imports cleanly.
+There is no `STANDING_RULES` constant. The summary and client-fit prompts are built on top of `GROUNDED_SYSTEM_PROMPT`, so they inherit its rules (use only the given figures, never invent, British English, text between tags is data) and also its citation and refusal-sentence instructions, which make no sense when no documents are supplied. None of the three `llm.py` prompts says "no personal advice, no forecasts"; only the agent prompt does (9.5). The risk warning line belongs to the streaming updates (6.3), whose prompts (`STREAM_SYSTEM_PROMPT`, `PORTFOLIO_STREAM_SYSTEM_PROMPT`) do state the no-advice and no-forecast rules.
 
 ### 6.1 Prompt design rules
 
@@ -460,7 +493,11 @@ holdings are top positions only and that no benchmark returns are supplied, so n
 { "summary": "...", "input_tokens": 412, "output_tokens": 158 }
 ```
 
-**Status: built** in `routers/funds.py` (`summarise`) and `llm.summarise_fund`. The fund record goes into the user message inside `<fund>` tags (dates as ISO strings). The system prompt carries `STANDING_RULES` plus the top-positions-only and no-benchmark-returns caveats. `max_tokens` 400. An unknown id is a 404 with no model call; provider errors map to 429/504/502 through `routers/errors.provider_errors`. Plain `def`, not `async`.
+**Status: built** in `routers/funds.py` (`summarise`) and `llm.summarise_fund`. The fund record goes into the user message inside `<fund>` tags (dates as ISO strings). The system prompt is `SUMMARY_SYSTEM_PROMPT`: the grounded prompt plus the top-positions-only, no-benchmark-returns and NAV-trend caveats (it does not state the no-advice or no-forecast rule). `max_tokens` 400. An unknown id is a 404 with no model call; provider errors map to 429/504/502 through `routers/errors.provider_errors`. Plain `def`, not `async`.
+
+`GET /portfolios/{id}/summary` does the same for a portfolio and returns the same shape. The router joins the portfolio's positions to the matching `FUNDS` records (safe, because create and update reject unknown `fund_id`s). The portfolio record (with `cash_weight_pct` when present) goes into the user message inside `<portfolio>` tags and the held fund records inside `<funds>` tags (dates as ISO strings).
+
+**Status: built** in `routers/portfolio.py` (`summarise`) and `llm.summarise_portfolio`. The system prompt is `PORTFOLIO_SUMMARY_SYSTEM_PROMPT`: the grounded prompt plus the top-positions-only and no-benchmark-returns caveats, the rule that weights are % of the portfolio with any remainder cash, and an instruction not to calculate blended, weighted or look-through figures (no such numbers are supplied, so the model may only quote the given ones). Like the fund prompt it does not state the no-advice or no-forecast rule. `max_tokens` 600. An unknown id is a 404 with no model call; provider errors map to 429/504/502. Plain `def`, not `async`. Tested with a fake model only (`test_portfolio_summary.py`).
 
 ### 6.3 Streaming client update
 
@@ -474,6 +511,13 @@ holdings are top positions only and that no benchmark returns are supplied, so n
 
 Errors that occur before the first chunk return a proper status code. Errors mid-stream cannot
 change the status, so log them and end the stream with a visible marker.
+
+**Status: built** for funds and portfolios.
+
+- **Fund:** `GET /funds/{id}/summary/stream` in `routers/funds.py` (`summarise_stream`) and `llm.stream_fund_update`, with `STREAM_SYSTEM_PROMPT` (the fund summary prompt plus the client-update rules and the exact `RISK_WARNING` line).
+- **Portfolio:** `GET /portfolios/{id}/summary/stream` in `routers/portfolio.py` (`summarise_stream`) and `llm.stream_portfolio_update`, with `PORTFOLIO_STREAM_SYSTEM_PROMPT` (the portfolio summary prompt plus the same rules and warning). It is a copy of the fund route. The user message has `<portfolio>` and `<funds>` blocks, as in the non-streaming portfolio summary.
+- **Shared behaviour:** `max_tokens` 2000, because thinking tokens share the budget and a cut-off update would lose its risk warning. The first chunk is read inside `provider_errors()` before the `StreamingResponse` (`text/plain`) is returned. An unknown id is a 404 with no model call; provider errors before the first chunk map to 429/504/502. A mid-stream failure is logged and the text ends with `[Stream interrupted. This update is incomplete.]` (`with_marker`, defined in `routers/funds.py` and imported by the portfolio router). Plain `def`, not `async`.
+- **Tests:** `test_fund_stream.py` and `test_portfolio_stream.py` use a fake `client.messages.stream`. Never run against the real model.
 
 ### 6.4 Structured analysis
 
@@ -504,7 +548,7 @@ validation. Do not trust the model to agree.
 **Status: built** in `routers/insights.py` (`client_fit`) and `llm.assess_fit`. Body `{"fund_id", "client_id"}`; an unknown id is a 404 with no model call.
 
 1. `mandate.check_fund` computes the breaches.
-2. `assess_fit` sends the client, fund and breaches (in `<client>`, `<fund>`, `<mandate_check_result>` tags) and forces the reply through a `record_assessment` tool whose schema is `MandateFitAssessment`. The system prompt says the breach list is authoritative.
+2. `assess_fit` sends the client, fund and breaches (in `<client>`, `<fund>`, `<mandate_check_result>` tags) and forces the reply through a `record_assessment` tool whose schema is `MandateFitAssessment` (`max_tokens` 800). The system prompt (`ASSESSMENT_SYSTEM_PROMPT`) says the breach list is authoritative and that an empty list covers top holdings only.
 3. The output is validated with `model_validate`. A failure or a missing tool block is retried once, then `InvalidAssessment` becomes a 502. Token counts are summed over both attempts.
 4. Enforced in code, whatever the model said: any breach sets `fits = false`, and `recommended_action: "approve"` becomes `"review"` (an extra rule beyond the spec; `reject` is left alone).
 
@@ -514,6 +558,41 @@ Response: `{"fund_id", "client_id", "breaches": [{rule, actual, limit, detail}],
 
 Every generated answer returns `input_tokens` and `output_tokens` (from the provider usage
 object). Optionally add `POST /tokens/estimate` using the provider's token counting.
+
+**Status:** the summary, client-fit and agent endpoints always return both counts, and `/insights/ask`
+returns them whenever Claude was called (a below-floor refusal has none). `/tokens/estimate` is not built.
+
+### 6.6 Model compatibility (Haiku and Sonnet)
+
+**Status: built, offline tests only. Not yet run against either model after these changes.** `CLAUDE_MODEL` in
+`config.py` can be Haiku 4.5 or Sonnet 5.5 (`claude-sonnet-5-5`). They differ in ways that broke the code:
+
+- **Read the answer by block type, never `content[0]`.** Sonnet 5.5 returns a `thinking` block before the text
+  block, so `response.content[0].text` raised `AttributeError: 'ThinkingBlock' object has no attribute 'text'`.
+  `llm.text_of(response)` returns the first `text` block and raises `RuntimeError` (naming the `stop_reason`) if
+  there is none. It replaces `content[0].text` in `summarise_fund`, `summarise_portfolio` and
+  `answer_from_context`. `assess_fit` (picks the `tool_use` block) and `AI_Layer/agent.py` (picks `text` blocks)
+  already selected by type. Raising rather than returning `""` is deliberate: an empty answer is not a refusal,
+  so a caller would otherwise treat it as a wrong answer and hide the cause. `test_llm.py` covers `text_of`.
+- **Thinking tokens share `max_tokens` with the answer.** At `max_tokens = 500`, five eval answers stopped with
+  `stop_reason == "max_tokens"` and `output_tokens == 500` while showing only about 60 to 110 words of text
+  (q02, q08, q09, q29, q33), so the thinking had used most of the budget. The limits are now 2000 for
+  `answer_from_context`, 1500 for `summarise_fund` and 2000 for `summarise_portfolio` (were 500, 400, 600).
+  `assess_fit` stays at 800 and is untested on Sonnet. These are ceilings, not targets: Haiku does not think
+  by default and simply uses less. `answer_from_context` still returns `stop_reason`, so a caller can see a
+  cut-off answer.
+- **Not done on purpose: per-model thinking settings.** Per the Anthropic documentation at the time of writing,
+  `thinking={"type": "disabled"}` is rejected on Sonnet 5.5 (its off switch is `between_tools`), and
+  `between_tools` and `output_config.effort` are not valid on Haiku 4.5, so turning thinking down would need a
+  branch on the model name. Headroom in `max_tokens` works for both with one setting.
+- **Sampling parameters are not an option.** The same documentation says `temperature`, `top_p` and `top_k`
+  return a 400 on every model from 2026-10-21, so an eval cannot be made deterministic that way. Two eval
+  questions (q04, q36) failed in one run and passed in the next on identical context. Judge strategies on
+  repeated runs, not one.
+- **Open: `assess_fit` on Sonnet 5.5.** `assess_fit` forces `tool_choice={"type": "tool", ...}`, which the
+  documentation says is a 400 on Sonnet 5.5. It works on Haiku 4.5. Switching `CLAUDE_MODEL` to Sonnet would
+  break `POST /insights/client-fit` until it uses `auto` plus a prompt instruction, or `strict` tool input.
+  Not tested and not fixed.
 
 ---
 
@@ -585,15 +664,25 @@ than writing it. A search result with no `fund_id` key then means "firm-wide or 
 
 **Status:** built in `Data/knowledge_store.py` and `POST /knowledge/index`, with these differences from
 the spec: the metadata key is `type`, not `doc_type`; it also stores `title` and `effective_date`;
-`fund_id` and `client_id` are written even when `None` (the "leave out" rule is not followed); and
-the response is `{"indexed": count(), "embedding_tokens": n}`, where `count()` returns `collection.count()`, the number of documents in the collection. The Chroma
-collection is `Asset_Management_docs` with cosine space, at `./chroma_store`.
+`fund_id` and `client_id` are passed to Chroma even when `None` (the code does not omit them), but
+Chroma 1.5.9 accepts a `None` value and drops the key, so a stored document with no fund or client
+has no such key, as the spec wants (checked against the installed version; an upgrade could change
+this); and the response is `{"indexed": count(), "embedding_tokens": n}`, where `count()` returns `collection.count()`, the number of documents in the collection. The Chroma
+collection is `Asset_Management_docs` with cosine space, at `./chroma_store`, relative to the working
+directory (see section 3). The committed store in `Asset Management - API/chroma_store` holds all 25
+documents. Importing `knowledge_store` opens the store, so merely running the tests from that
+folder rewrites its `chroma.sqlite3` and shows up as a git change. `DOCUMENT_LIST` is not used by
+the indexing here (it reads `DOCUMENTS.values()`); only `Chunking/chunk_index.py` uses it.
 
 Chunking decision: documents of one to two pages can be embedded whole, which keeps context
 intact. The longest current document (`doc-01`) is about 310 words, so **none of the 25 reaches the
 roughly 500-word threshold and all are embedded whole**. If a longer document is added, split it
 into chunks and store the source document id in metadata so citations still point at the whole
 document. Record your decision and reasoning in the design note.
+
+**Status:** this is still the decision in force. Six alternatives are implemented in `Chunking/` and an
+eval set exists to compare them (7.7), but the comparison has not been run, so whole-document
+embedding is the default and not yet a measured choice.
 
 ### 7.3 Search only
 
@@ -626,6 +715,9 @@ with whitespace collapsed (not a snippet), and `score`. An empty index does not 
 unrelated, some borderline, some asking for personal advice). Record the score of the best result
 for each. Pick the floor that separates them and write down what happened at other values. Too
 low: unrelated questions get a confident answer. Too high: legitimate questions are refused.
+The questions now exist as `Eval/eval_set.py` (7.7): 40 answerable and 10 that must be refused. They are
+not yet scored, so the 0.425 floor is still unmeasured. Note the set has no questions labelled borderline,
+and none asking for personal advice ("should I buy").
 
 **Additional refusal rule:** questions asking for personal recommendations ("should I buy...?") or
 return forecasts are refused regardless of score, using a simple classifier check (a cheap
@@ -666,11 +758,14 @@ the model each passage's `as_of_date` and `status` so it can caveat ("as of Q1")
 
 **Status:** the dates and `status` are stored and returned by search. Nothing else uses them yet.
 
-### 7.6 Answer grounding checks (to implement later)
+### 7.6 Answer grounding checks (partly built)
 
 Partly built. `AI_Layer/grounding.py` holds the cheap structural checks (pure functions: no network,
 no model, no FastAPI): `REFUSAL_SENTENCE`, `normalise`, `is_refusal`, `split_sentences`,
-`citations_in` and `check_citations`. The debug `print` has been removed. `llm.py` imports the module
+`citations_in` and `check_citations`. The debug `print` has been removed (a commented-out one
+remains). `split_sentences` works line by line, strips list markers, splits after `.`, `!` or `?` followed by
+whitespace, and glues a piece that is only a citation to the sentence before it. `check_citations`
+ignores sentences under three words. `llm.py` imports the module
 (fixed) and uses `REFUSAL_SENTENCE` in its prompt, and `routers/insights.py` calls `check_citations` and acts on the result
 (items 1 and 2 below are done). `tests/test_grounding.py` now tests `check_citations` directly (items 4 and 6 are partly done). This section lists what is still missing.
 
@@ -692,7 +787,215 @@ no model, no FastAPI): `REFUSAL_SENTENCE`, `normalise`, `is_refusal`, `split_sen
    false "uncited" result. Accept it for a cheap check and note it.
 6. **Tests. Partly done** (`tests/test_grounding.py`, 4 tests, no mocks): a refusal passes, a fully cited answer lists both ids,
    an uncited sentence is flagged and fails the check, and `Revenue was $1.24 billion. [doc-101]` stays one sentence.
-   Still to add: a citation to a document not retrieved is `invalid`, `[doc-1]`, and `is_refusal(None)`.
+   Weak spots: the fully cited test only checks that two ids were cited (its `passed` assertion is commented out), the
+   trailing-citation test has a live `print` and a commented-out `cited` assertion, and `SOURCES` is never used.
+   An `invalid` citation is covered only through the endpoint (`test_llm.py`). Still to add: a direct `invalid` test,
+   `[doc-1]`, and `is_refusal(None)`.
+
+### 7.7 Evaluation set and chunking experiments
+
+**Status: the runners have been run, and the decision is written in `Docs/Chunking-decision.md`: serve
+`sections_contextual` with a relevance floor of 0.635. It is not wired into the API yet (see "Not done" below).**
+Two folders under `Asset Management - API/` exist to answer two open questions: where the relevance floor should
+sit (7.4) and whether chunking beats whole-document embedding (7.2). Retrieval: `sections_contextual` found the evidence in the top 3 for 97.5% of the
+answerable questions (MRR 0.898) with 117 words of context, against 100% and 582 words for `whole_document`.
+Early answer accuracy was measured with a grader and a token limit that both under-counted correct answers; the fixes
+are below and the note holds the corrected results. Hybrid search is still unscored.
+
+**Evaluation set** (`Eval/eval_set.py`). `EVAL_SET` is a list of 50 dicts, `q01` to `q50`, each with `id`,
+`question`, `doc_id`, `evidence`, `keywords` and `kind`. The module also holds `EVAL_SET_SUMMARY` (counts;
+its `source_document_count` is hard-coded to 25), `RESEARCH_SOURCES` (the 7 external articles that
+inspired the question themes; the expected answers come from `docs.py` only), and two helpers,
+`answerable()` (items whose `doc_id` is set) and `unanswerable()`.
+
+| Kind | Count | Notes |
+|---|---|---|
+| `lookup` | 9 | |
+| `numeric` | 9 | |
+| `negation` | 8 | "does X require...", "is Y a breach" |
+| `multi-hop` | 6 | each still names a single `doc_id` |
+| `definition` | 3 | |
+| `policy` | 2 | |
+| `title-dependent` | 2 | the answer depends on knowing which fund or client a passage is about |
+| `causal` | 1 | |
+| `unanswerable` | 10 | `q41` to `q50`: `doc_id`, `evidence` and `keywords` are empty or `None`. The right outcome is a refusal or an "insufficient evidence" answer |
+
+Conventions a runner must follow:
+
+- `doc_id` is the zero-padded string id (`"doc-01"`) and always exists in `DOCUMENTS`. It matches the `doc_id`
+  metadata of a chunk, so a chunk hit can be scored against it. It is a single id, so no question rewards
+  retrieving two documents.
+- `evidence` is a sentence copied from that document. A `keywords` entry may list alternatives with `|`
+  (`"no|not"`). Match them on whitespace-normalised, case-folded text: the documents are hard-wrapped, so
+  plain substring matching misses phrases such as "digital payments" that wrap across a line. Matching also
+  ignores formatting (`canon()` in `Eval/eval_tools.py`, see "Answer-eval measurement fixes" below). A keyword
+  should name a fact that is in the evidence span, so a correct answer can always satisfy it. The only
+  exceptions are the yes/no groups (`"no|not"`, `"no|do not"`), which are answer words by design (for example
+  `q29`); `test_eval_set.py` enforces this. `q21` ("not a rating"), `q37` ("not descriptive prose") and `q20`
+  ("concentrated") broke the rule and were fixed.
+- Coverage: 22 of the 25 documents have at least one question. `doc-20`, `doc-21` and `doc-22` have none.
+  The set covers documents only: no question needs a record, a mandate rule or the agent's tools, so the
+  combined demo question (section 12) is not represented.
+- The ten refusals are all "the knowledge base does not say" questions, and only `q48` asks for a forecast.
+  None asks for personal advice, so the advice and forecast refusal (7.4, not built) has no eval cases.
+
+**Chunking experiments** (`Chunking/`). Not imported by the API, the agent or any router.
+
+| Strategy key | What it does | Chunks over the 25 documents |
+|---|---|---|
+| `whole_document` | one chunk per document, the current behaviour | 25 |
+| `fixed_100` | every 100 words, no overlap | 60 |
+| `fixed_overlap_25` | every 100 words, 25 words of overlap | 65 |
+| `sentences_100` | whole sentences packed up to 100 words | 60 |
+| `sections_plain` | one chunk per `## ` section, packed up to 150 words | 158 |
+| `sections_contextual` | same, prefixed `Document title > Section heading` | 158 |
+
+- A chunk is `{id: "doc-01#00", doc_id, title, text}`, and `text` is what is embedded and what the model
+  reads. Text before the first `## ` (the title block every document has) becomes its own chunk, prefixed
+  with the title only.
+- `chunk_index.build(strategy)` fills one Chroma collection, `chunks_<strategy>`, in the same store as the
+  production index (`CHROMA_PATH`; the committed store holds only `Asset_Management_docs`). Each collection
+  stores a fingerprint of the model, chunk ids and texts and is rebuilt only when that changes or
+  `force=True`. A rebuild embeds first and replaces the old collection afterwards, so a Voyage failure keeps
+  the previous index. `embed_batched` sleeps 22 seconds after every batch to stay under the free tier's
+  3 requests per minute, so a full six-strategy build takes a few minutes.
+- `search_with_vectors(strategy, query_vectors, k)` takes questions that are already embedded, so one
+  embedding pass serves all strategies. Hits are `{id (the document), chunk_id, title, text, score}` with
+  `score = 1 - cosine distance`, as in 7.3. They carry no `as_of_date` or `status`, so they cannot yet feed
+  `routers/insights.build_context`. `cosine_for` gives a chunk found only by keyword search a cosine score
+  so the relevance floor applies to it too.
+- `bm25.BM25Index(chunks).search(query, k)` is a hand-written keyword index over the same chunks (no network).
+  `context.order_for_context` arranges hits in a U shape (best first, second best last, weakest in the
+  middle) and `context.build_context` labels them `[doc-NN] title`.
+- `fusion.reciprocal_rank_fusion(rankings, k=60)` scores each id `1 / (k + position)` per list and sums them.
+  `hybrid.search_with_vector(strategy, question, query_vector, top_k=3, pool=10)` takes the top 10 from the
+  vector index and from BM25, merges them by RRF, keeps `top_k`, and returns the usual hit plus `found_by`
+  (`vector`, `keyword` or both), `rrf` and `exact_match`. A chunk only BM25 found gets its cosine from
+  `chunk_index.cosine_for`, so the floor still applies; `hybrid.is_usable(hit, floor)` passes a hit whose cosine
+  reaches the floor **or** whose `exact_match` is true. It raises `RuntimeError` if a BM25 chunk is missing from the vector index.
+  **Nothing calls it**: the runners below score vector search only, so hybrid is built but unscored.
+  **Caveat before wiring it in:** `exact_match` counts any token containing a digit as an identifier. That suits
+  Firm Intelligence (matter references such as `LP-3307`) but this corpus has no such codes; its digit tokens are
+  years, dates, quarters and fund numbers. Three of the ten must-refuse questions (`q41`, `q42`, `q43`) contain
+  `2024` or `31`, so a chunk sharing that token would skip the floor and the question would reach Claude. Revisit
+  the rule (or the floor logic) before hybrid serves real questions. The eval set also has no exact-id or rare-term
+  questions, so it would not show hybrid's main strength.
+- **Running the comparison** (from `Asset Management - API/`, with `VOYAGE_API_KEY` set; the first run builds every
+  collection, so it is slow):
+  - `python -m Eval.eval_retrieval` builds all six indexes, embeds the 50 questions once and prints, per strategy,
+    recall@1, @3, @5, MRR, context words in the top 3, the mean best score for answerable and for unanswerable
+    questions (the gap guides the floor), recall@3 by question kind and the ids missed at k=3. It saves `eval_results/retrieval.json`.
+  - `python -m Eval.floor_preview` embeds the questions and, for `sections_contextual` (edit `STRATEGY` in the file
+    to change it; that collection must already be built), lists each question's best score and how many answerable
+    (bad) and unanswerable (good) questions each floor from 0.40 to 0.65 would refuse before any model call.
+  - `python -m Eval.eval_answers <strategy> [<strategy> ...] [--floor X]` (also needs `ANTHROPIC_API_KEY`) asks
+    Claude one question at a time with the strategy's top 3 chunks above the floor (default `config.RELEVANCE_FLOOR`),
+    then reports answer accuracy, refusal accuracy, false refusals, wrong or unrefused ids, ids cut off at `max_tokens`, calls and average input
+    tokens, and saves `eval_results/answers.json`. It makes up to 50 model calls per strategy, so run it on a shortlist.
+  - Both runners write `eval_results/` relative to the working directory, so run them from `Asset Management - API/`.
+    The results and the decision are in `Docs/Chunking-decision.md`.
+- Facts to keep in mind when reading results: the longest section is 65 words, so the 150-word cap never
+  splits one and the section strategies differ from `sentences_100` mainly by heading context; the
+  `fixed_*` strategies produce tail chunks as short as 3 words.
+- `tests/test_chunking.py` (2 tests, offline) covers the strategies and `tests/test_eval_set.py` (9 tests, offline)
+  checks the eval set against the documents: unique ids, each evidence span present, inside one section and
+  appearing once in the corpus, keyword matching (whole word, refusal aware, formatting-insensitive, and still
+  rejecting wrong answers) and that every non-yes/no keyword appears in its own evidence. `chunk_index.py`, `bm25.py`, `fusion.py`, `hybrid.py`
+  and `context.py` have no tests.
+
+**Answer-eval measurement fixes.** `Eval.eval_answers` on `sections_contextual` (floor 0.65) scored 0.70 with Haiku
+and 0.475 with Sonnet 5.5 on the same retrieved context. A stronger model scoring lower pointed at the
+measurement, so the 17 answers marked wrong in the Sonnet run were read one by one. By that reading (a judgement,
+not a measurement; 17 answers, one reader): 5 were cut off at `max_tokens` (6.6), 10 were complete and correct but
+failed the exact-phrase keywords, and 2 passed on a re-run (no temperature control, 6.6). Only about 2 looked like
+real misses or unknowns (q33 gave the fund-rating table instead of the Conservative/Moderate labels; q02 was cut
+off before the keywords). The four answerable questions refused at the floor (q06, q20, q38, q40) are a separate
+issue and were not touched. Two fixes, applied to every strategy alike:
+
+1. **Token limit.** See 6.6. `run()` now also returns `truncated`, the ids whose `stop_reason` was `max_tokens`,
+   so a cut-off answer is reported on its own instead of looking like a wrong one.
+2. **Formatting-insensitive matching.** `canon()` is applied to the answer and to each keyword alternative before
+   the existing whole-word match: lower-case; en and em dashes to `-`; `×` to `*` and `÷` to `/`; markdown and table
+   characters (`* _ \` | # [ ]`) and `, : ;` replaced by a space; "1 to 6" to "1-6"; "doesn't" to "does not";
+   whitespace collapsed. This fixes `does **not** eliminate`, `A–D`, `P × H ÷ 100`, "quarterly, in arrears" and
+   `| **A** | Excellent |`. The trailing-`*` prefix marker is read before `canon()` runs, because `canon()` would
+   strip it. Whole-word matching and the refusal check are unchanged, so "no" still does not match inside "not".
+
+Paraphrases that formatting cannot fix were handled by editing the keywords. The rule: a keyword names a fact from
+the evidence span, with `|` synonyms and `stem*` prefixes, and never copies wording from a model answer.
+
+| Q | Old keywords (changed ones) | New | Why |
+|---|---|---|---|
+| q02 | "not sufficient reason", "buy a security" | "growth", "not sufficient\|insufficient\|not enough" | exact phrase too literal |
+| q03 | "investment thesis deteriorates", "better opportunity", "portfolio risk" | "thesis\|investment case", "better opportunit*\|more attractive", "risk" | answers say "investment case" |
+| q08 | "reducing materials", "increasing telecommunications" | "reduc*\|cut\|lower*", "materials", "increas*\|rais*", "telecommunications" | answers say "reduced", "increased" |
+| q09 | "equity volatility", "commodity-price", "concentrated country or sector" | "volatil*\|swing*", "commodit*", "concentrat*" ("foreign-exchange" now also accepts "currency") | paraphrased risk names |
+| q15 | "current holdings and assumptions" | "holdings\|bonds", "assumption*" | paraphrase |
+| q18 | "reduce dependence", "does not eliminate market risk" | "reduc*", "dependence", "eliminate market risk\|remove market risk" | "reduce the portfolio's dependence" |
+| q20 | "concentrated" | removed | not in the evidence span |
+| q21 | "insufficient data", "A-D rating", "not a rating" | "insufficient data\|not enough data", "A-D" | "not a rating" not in the evidence |
+| q25 | "quarterly in arrears", "fund-level ongoing charges" | "quarterly", "arrears", "ongoing charges" | paraphrase |
+| q29 | "above the maximum" | "above" | answer says "above it" |
+| q30 | "Unrated: insufficient data" | "unrated", "insufficient data\|not enough data" | table layout and wording |
+| q35 | "not automatically suitable" | "automatically" | "does not automatically make a fund suitable" puts words between the two |
+| q37 | "exact compliance calculations", "not descriptive prose" | "exact compliance calculation*" | "not descriptive prose" not in the evidence |
+| q39 | "P * H / 100", "portfolio position", "fund holding", "effective portfolio exposure" | "P * H / 100\|/ 100\|divide by 100\|divided by 100\|dividing by 100", "effective", "exposure" | model wrote "(Portfolio weight × Fund holding weight) / 100" in words, not the letters P and H; the division by 100 is still required |
+| q40 | "ongoing_charge_pct", "do not add" | "ongoing_charge_pct\|structured", "not add*\|not be added" | "should not be added"; the database field name is not what the question asks |
+
+Integrity checks. The edits were chosen from the evidence text and then checked against the answers, and they apply
+to all strategies. `test_eval_set.py` now fails if any keyword (except yes/no groups) is missing from its own
+evidence, and includes wrong answers that must still fail (for example "Yes, diversification eliminates market
+risk" against q18). `q33` was left unchanged on purpose: its answer was a real miss and should keep failing.
+The loosened keywords are weaker tests than the old ones (for example q39 no longer requires the words "portfolio
+position"), so a lenient pass means "has the facts", not "used the document's wording". Known weakening: q39's
+"/ 100" would also accept a wrong formula such as "P / 100", and q40's `structured` alone satisfies its field-name
+group; the rest of each question's keywords and the tests that wrong answers fail limit the damage.
+`q20` was reviewed and **deliberately left strict**. The model answered from doc-06 (theme popularity,
+concentration) rather than doc-24, which holds the evidence, and said "investor sentiment" while citing only
+doc-06, which does not contain that phrase (it is only in doc-24). That is a retrieval miss plus a claim its
+cited source does not support, so it should stay a failure.
+
+**Results after the fixes** (final table in `Docs/Chunking-decision.md`). With Haiku at floor 0.635, `sections_contextual`
+scored 0.975 (only q20 fails), no answerable question was refused, and all 10 unanswerable ones were refused (3 by the
+floor, 7 by the model). Earlier runs, not recorded in the note: at floor 0.65 it scored 0.85 with both Haiku and Sonnet
+(Haiku moved from 0.70 to 0.85 with the same calls, context and floor refusals, so that gain was entirely the eval fixes),
+and 0.925 with Haiku at 0.635 before the q35, q39 and q40 keywords were loosened. `whole_document` and `fixed_overlap_25`
+stay near 0.35 because their cosine scores sit below the shared floor (most questions are refused), not because their answers
+are poor, so they cannot be ranked this way. Repeated runs of the same setting moved those two by a few points while
+`sections_contextual` held steady: single runs are noisy and should be repeated. Ten unanswerable questions are a thin basis
+for a refusal rate.
+
+**Not done:** a repeat-run average; scoring hybrid search; `config.RELEVANCE_FLOOR` is already 0.635 but `/insights/ask`
+and the agent still search the whole-document index, where that floor refuses most questions, so serving the chunked index
+has to come with it; wiring any chunked index (hybrid or not) into `/knowledge/*`, `/insights/ask` or the
+agent. Firm Intelligence did that last step in its `knowledge_store.py` (a `CHUNK_STRATEGY` constant and a
+`SEARCH_MODE`). It would need chunk hits to carry `as_of_date` and `status`, which `routers/insights.build_context` prints.
+
+### 7.8 Azure AI Search (deferred)
+
+**Status: not built, deliberately ignored for now.** Firm Intelligence has an Azure AI Search backend that this
+project will adopt later. None of it is copied. What it does, so the port is quick:
+
+| Firm Intelligence file | Job |
+|---|---|
+| `azure_index.py` | Defines the index: key `chunk_key` (chunk id with `#` replaced by `_`), `chunk_id`, `doc_id`, `title`, `text`, and a 512-dimension `embedding` (the size `voyage-3-lite` produces) with HNSW cosine, plus a semantic configuration |
+| `azure_store.py` | `build_index(strategy)` drops and recreates the index and uploads every chunk with the vectors already in the local Chroma collection (no new embedding cost). `search_with_vector` runs keyword and vector search in one query (Azure fuses them with RRF), optionally the semantic reranker, and returns hits with `rerank_score` (0 to 4), `rrf` and `exact_match` |
+| `azure_build.py` | Entry point, `python -m azure_build` |
+| `settings.py` | `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_INDEX` (default `firm-chunks-v1`), `SEMANTIC_CONFIG`, `RERANK_FLOOR` (2.0), `AZURE_SEARCH_RULE` (the exact-match rule on or off) |
+| `gate.py` | `is_usable` that judges an Azure hit on its rerank score against `RERANK_FLOOR`, a local hit on its cosine against the cosine floor, and lets an exact match through |
+
+Where it would plug in: as a second backend behind `knowledge_store.search`, with the gate using the rerank floor
+for Azure hits. It needs the `azure-search-documents` and `azure-identity` packages (not in `requirements.txt`),
+an Azure AI Search service with the semantic ranker enabled, and `az login` for local sign-in. New config variables
+would go in section 3. The same exact-match caveat as in 7.7 applies to `AZURE_SEARCH_RULE`.
+
+**Problems seen in the firm code** (read from the source, never run against Azure, so confirm before relying on
+them) that should be fixed when porting rather than copied:
+
+- `azure_store.search_with_vector`: `search_client().search(search_texts=...)` should be `search_text`; the vector query names the field `embeddings` but the index field is `embedding`; `set*bm25.tokenize(...)` is a syntax error (`set(...)`); `settings.EXACT_MATCH_RULE` does not exist (`settings.py` defines `AZURE_SEARCH_RULE`).
+- `azure_store`: `SearchClient(..., credentials=...)` should be `credential=` (also in `SearchIndexClient`); `failed = [result for result in results if not results.succeeded]` should test `result.succeeded`.
+- `azure_index`: `SemanticField(filed_name=...)` is a typo for `field_name`; `SemanticPrioritizedFields` takes `title_field=` and `content_fields=` (a list), not `title_fields=` / `content_field=`.
+- `gate.py`: tests `hit.get("reranker_score")` but reads `hit["rerank_score"]`, so a rerank score is never used; the Azure hits store it as `rerank_score`.
 
 ---
 
@@ -717,7 +1020,7 @@ Conventions the documents rely on:
 
 - A value exactly equal to a limit is compliant. Only a value above the limit is a breach
   (the Fund 5 / Client 5 boundary case).
-- A rule that is `None` on the client (no ESG minimum, no fee ceiling) is skipped.
+- A rule that is `None` on the client (no risk tolerance, concentration limit, ESG minimum or fee ceiling) is skipped. Clients created through the API can leave any of them unset.
 - `unrated` is not in the A > B > C > D ordering. It fails any ESG minimum, so Fund 6 is flagged
   for a client with one.
 - Holdings are top positions only, so a clean result means "no breach among reported holdings",
@@ -741,9 +1044,8 @@ FastAPI imports (it reads `FUNDS` only):
   and ignores cash.
 
 The tests call it: `breached_rules` in `test_clients.py` wraps `mandate.check_fund`, and `test_portfolio.py`
-wraps `mandate.look_through_exposure`. No endpoint calls `check_fund` in product code yet
-(`/insights/client-fit` is not built, see 6.4). There is no check of a whole portfolio against a client,
-but the agent's `check_mandate` tool (section 9) does: it calls `check_fund` for a fund, or for each position of a portfolio plus `look_through_exposure` for the client's excluded sectors.
+wraps `mandate.look_through_exposure`. Two callers use `check_fund` in product code: `POST /insights/client-fit` (6.4) and the agent's `check_mandate` tool (section 9). No
+endpoint checks a whole portfolio against a client, but the agent's tool does: it calls `check_fund` for a fund, or for each position of a portfolio plus `look_through_exposure` for the client's excluded sectors.
 
 ---
 
@@ -752,7 +1054,7 @@ but the agent's `check_mandate` tool (section 9) does: it calls `check_fund` for
 **Status of section 9: built (partial).** `AI_Layer/agent.py` holds the loop (`ask_with_tools`), `execute_tool`,
 the two tool schemas and the system prompt. `routers/agent.py` serves `POST /agent/ask` (body `{"question": "..."}`, at least 3
 characters), registered in `main.py`. The loop reads `config.AGENT_MAX_ITERATIONS`. It is tested with a fake model only
-(`tests/test_agent.py`) and has never been run against the real model. **Section 10 is not built:** the UI folder is empty.
+(`tests/test_agent.py`) and has never been run against the real model. **Section 10 is not built:** there is no UI folder yet.
 
 ### 9.1 Tools
 
@@ -766,7 +1068,11 @@ reads the record stream (`records.py`). There is deliberately no `get_fund` tool
 fund X breach client Y's exclusion, and what does our policy say?", and its system prompt must tell
 it to take exact numbers from the record tools and policy wording from the search tool.
 
-Each has a JSON input schema with a clear description so the model knows when to use it. `search_knowledge_base` applies the same `RELEVANCE_FLOOR` as `/insights/ask`, so weak matches never reach the model, and returns the top 3.
+Each has a JSON input schema with a clear description so the model knows when to use it. `search_knowledge_base` applies the same `RELEVANCE_FLOOR` as `/insights/ask`, so weak matches never reach the model, and returns the top 3. Each passage is formatted `[doc-NN] title (score 0.xx)` then its text, with no as-of date or status, so the agent cannot caveat a historical document the way `/insights/ask` can.
+
+Result shapes of `check_mandate` (JSON text): for a fund, `{"client_id", "fund_id", "breaches": [...]}`; for a
+portfolio, `{"client_id", "portfolio_id", "breaches_by_fund": {fund_id: [...]}, "excluded_sector_exposure_pct": {sector: pct}}`, where
+the exposure map lists only sectors above 0 (JSON turns the integer fund ids into strings).
 
 ### 9.2 The loop
 
@@ -808,7 +1114,8 @@ On hitting the limit the route returns HTTP 200 with
 
 because hitting the limit is an expected outcome, not a server fault. (The spec said `"answer": null`; the
 code uses a plain sentence instead, so a UI that shows `answer` needs no special case. Show the `completed` warning too.)
-`tool_calls_made` counts successful calls only. Both paths return `answer`, `completed`,
+`tool_calls_made` counts successful calls only. Each model call uses `max_tokens` 600, and a final reply cut off at that
+limit still comes back `completed: true` with `stop_reason: "max_tokens"` and a possibly truncated answer. Both paths return `answer`, `completed`,
 `stop_reason`, `tool_calls_made`, `input_tokens`, `output_tokens`.
 
 **Endpoint errors** (`routers/agent.py`, same style as `/insights/ask`): rate limit 429, provider timeout 504,
@@ -847,6 +1154,13 @@ generic error with the status code.
 Pick a fund from a dropdown populated from `GET /funds`. Stream the client update into a
 placeholder as chunks arrive. Show API error statuses cleanly.
 
+**Status: built** in the Summary tab of `app.py`. The tab has two blocks that share one `stream_summary(path)` helper (`httpx.stream` into `st.write_stream`, errors shown through `api_errors`):
+
+- a Fund dropdown and "Get fund summary" button, which stream `GET /funds/{id}/summary/stream`;
+- a Portfolio dropdown (labelled "Portfolio {id}", from `GET /portfolios`) and "Get portfolio summary" button, which stream `GET /portfolios/{id}/summary/stream`.
+
+Tested in `test_app.py` with a fake `httpx.stream`, so the real stream has not been exercised from the UI in tests.
+
 ### 10.4 Fund comparison (the domain-specific feature)
 
 Choose two or more funds. Show side by side: strategy, risk rating, fee, ESG rating, top holdings,
@@ -877,16 +1191,23 @@ or depend on the network in tests.
 | `test_portfolio.py` | CRUD, 404s, validation (unknown fund, total over 100, weight out of range); seed portfolios point at real funds and total 100 with cash; Portfolio 4's cash; look-through exposure maths (Portfolio 5 tobacco 0.45%), cash ignored, zero exposure |
 | Document integrity | every document's `fund_id` and `client_id` exist in the records; each document's string `id` is `doc-` plus its dict key zero-padded to two digits (key 1 gives `"doc-01"`), and ids are unique |
 | Filters | the required fund, client and portfolio filters (section 5.2) |
-| Summary | mocked Claude returns text and token counts are passed through (`test_summary.py`) |
+| Summary | mocked Claude returns text and token counts are passed through (`test_fund_summary.py`, `test_portfolio_summary.py`) |
 | Refusal rule | nothing above the floor gives `refused: true` **and the mocked LLM is called zero times** |
 | Advice refusal | "should I buy" is refused before retrieval |
-| Grounding checks | refusal passes; uncited sentence (3+ words) fails; citation to an unretrieved id is `invalid`; trailing citation stays with its sentence (section 7.6). All but `invalid` are in `test_grounding.py` |
+| Grounding checks | refusal passes; uncited sentence (3+ words) fails; citation to an unretrieved id is `invalid`; trailing citation stays with its sentence (section 7.6). All but `invalid` are in `test_grounding.py`; `invalid` is covered only through `/insights/ask` in `test_llm.py` |
 | Agent loop | normal completion; tool call then answer; unknown tool reported as error, not raised; missing argument; tool exception; **model that never stops** ends at `AGENT_MAX_ITERATIONS` with `completed: false` |
-| Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 (covered for `/agent/ask`, `/insights/ask`, `/insights/client-fit` and the summary) |
+| Error mapping | provider timeout gives 504, rate limit 429, other upstream 502 (covered for `/agent/ask`, `/insights/ask`, `/insights/client-fit` and both summaries) |
 | Structured analysis | invalid model output is rejected; a mandate-rule breach forces `fits = false` (`test_client_fit.py`) |
 
-**Status:** the first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
-`test_llm.py` (8 tests) and `test_agent.py` (15 tests; 77 pass in total with the four files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
+**Status:** 82 tests (collected cases), all passing. Run `python -m pytest` from the project root or from `Asset Management - API/`, in the project-root `.venv`
+or in a global Python whose FastAPI and Starlette match (all three were checked). FastAPI 0.115.6 needs Starlette below 0.42; with a newer one
+(the global Python once had 1.9.0, pulled in when the UI's `streamlit` was installed without its venv) importing the app fails with
+`Router.__init__() got an unexpected keyword argument 'on_startup'`. `tests/conftest.py` now stops with a clear message in that case; fix it with
+`pip install starlette==0.41.3`. Per file: `test_funds.py` 2,
+`test_clients.py` 12, `test_portfolio.py` 7, `test_llm.py` 8, `test_agent.py` 12, `test_fund_summary.py` 3, `test_fund_stream.py` 4, `test_portfolio_summary.py` 3, `test_portfolio_stream.py` 3, `test_client_fit.py` 8, `test_grounding.py` 4, `test_knowledge.py` 6, `test_chunking.py` 2, `test_eval_set.py` 8 (evidence in each document, unique ids, keyword matching and its leniency limits; no mocks).
+Nothing tests the BM25 index, the chunk index, `fusion.py`, `hybrid.py` or the context ordering (7.7).
+The first three rows exist (`test_funds.py`, `test_clients.py`, `test_portfolio.py`; the mandate tests call `mandate.py`), and
+`test_llm.py` (8 tests) and `test_agent.py` (12 tests; 82 pass in total with the files below) cover the refusal rule and part of the grounding row through `POST /insights/ask`, with `knowledge.search` and
 `llm.answer_from_context` replaced by `monkeypatch` fakes: below the floor refuses with zero model calls, a cited answer passes with only cited ids in `sources` and a labelled context,
 the model's refusal sentence is refused, a citation to an unretrieved id is refused, and an uncited sentence is flagged not refused.
 `test_agent.py` fakes `agent.client.messages.create` and covers: a plain answer, a tool call then an answer (token totals summed), a model that never stops
@@ -896,8 +1217,8 @@ a tool exception reported as an error, the search floor and formatting, and `/ag
 fails instead of spending money) and restores `CLIENTS` and `PORTFOLIOS` between tests. Not written: document integrity,
 filters, advice refusal, a direct test of an `invalid` citation in `grounding.py`, a live-model run of summary and client-fit.
 `test_grounding.py` (4 tests) calls `check_citations` directly with no mocks: refusal, fully cited answer, uncited sentence flagged, trailing citation kept with its sentence.
-`test_knowledge.py` (5 tests) fakes `knowledge.search`, `build_index` and `count`: ranked hits, 409 before indexing, `top_k` above 8 gives 422, `/knowledge/index` returns the count and token total, and a short question to `/insights/ask` gives 422. The ask endpoint itself is tested in `test_llm.py`.
-`test_summary.py` (7 tests) and `test_client_fit.py` (12 tests) fake `llm.client.messages.create`: tokens and prompt caveats, 404 with zero model calls, 429/504/502 mapping, a breach forcing `fits = false` and blocking `approve`, one retry on invalid output with summed tokens, 502 after two invalid outputs. No test calls Claude, Voyage or Chroma.
+`test_knowledge.py` (5 tests) fakes `knowledge.search`, `build_index` and `count`: ranked hits, 409 when the faked search raises `RuntimeError` (the real search never does, so this proves the router mapping only, not the behaviour before indexing), `top_k` above 8 gives 422, `/knowledge/index` returns the count and token total, and a short question to `/insights/ask` gives 422. The ask endpoint itself is tested in `test_llm.py`.
+`test_fund_summary.py` (3 tests), `test_portfolio_summary.py` (3 tests) and `test_client_fit.py` (8 tests) fake `llm.client.messages.create`: tokens and prompt caveats, 404 with zero model calls, 429/504/502 mapping, a breach forcing `fits = false` and blocking `approve`, one retry on invalid output with summed tokens, 502 after two invalid outputs. No test calls Claude or Voyage, and none queries Chroma, but importing the app opens the on-disk store (see 7.2).
 
 Mocking approach: replace the client's `create` method and the embedding function with fakes using
 `monkeypatch`. For the iteration limit test, make the fake model return a tool request every time,
@@ -941,18 +1262,18 @@ and the demo needs a real-model run of the agent, which has not happened yet (th
 |---|---|---|---|
 | 1 | Domain, data model, seed data in `records.py`, 25 documents in `docs.py` | records and documents reviewed for realism, integrity checks pass | Done, except the document integrity test (section 11) |
 | 2 | API skeleton, health, CRUD, filters, error scheme | CRUD tests pass in all three test files | Partial: skeleton, health and CRUD done; filters and shared error scheme missing |
-| 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested. No whole-portfolio check yet |
-| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Partial: summary and `/insights/client-fit` built and tested with a fake model, not yet against real Claude. Streaming update (6.3) not built |
-| 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. Floor scores not recorded, no advice check |
+| 3 | Mandate rules in `mandate.py`, tested in `test_clients.py` and `test_portfolio.py` | every rule and seed edge case tested | Done: `mandate.py` built and tested, used by `/insights/client-fit` and the agent. No whole-portfolio endpoint or concentration rule (the agent checks a portfolio fund by fund) |
+| 4 | Summary, streaming update, structured analysis | endpoints work against real Claude | Partial: fund and portfolio summaries and `/insights/client-fit` built and tested with a fake model, not yet against real Claude. Streaming updates (6.3) for funds and portfolios built and tested with a fake stream, not yet against real Claude |
+| 5 | Indexing, search, grounded answers, floor tuning | refusal tested, scores recorded | Partial: indexing, search and `POST /insights/ask` with a tested refusal. The 50-question eval set (`Eval/eval_set.py`) and six chunking strategies (`Chunking/`) exist, and runners to score them exist (`Eval/eval_retrieval.py`, `eval_answers.py`, `floor_preview.py`), but none has been run: floor scores not recorded, no chunking comparison, no advice check (7.7). Hybrid search is built (`Chunking/hybrid.py`) but not scored or wired in. Azure AI Search is deferred (7.8) |
 | 6 | Agent with both tools, safe execution, limit handling | loop tests pass including the limit | Done against a fake model (`test_agent.py`). Not yet tried with the real model |
 | 7 | Streamlit UI: Ask, Search, Streaming, Comparison | every button hits the real API | Not started |
 | 8 | Hardening, READMEs, design note, demo rehearsal | fresh checkout runs from the README | Not started |
 
 ### Stretch goals
 
-Chunk long documents with source ids in metadata; filter searches by document type or date via
+Chunk long documents with source ids in metadata (strategies built in `Chunking/`, not wired in); filter searches by document type or date via
 Chroma metadata; rerank results; stream the grounded answer; build an evaluation set of questions
-with expected source documents and report retrieval hit rate; add authentication and rate
+with expected source documents (built, `Eval/eval_set.py`) and report retrieval hit rate (runner built in `Eval/eval_retrieval.py`, not yet run); Azure AI Search with a semantic reranker (7.8, deferred); add authentication and rate
 limiting; add a Dockerfile and compose file to run both projects.
 
 ---
@@ -969,7 +1290,11 @@ limiting; add a Dockerfile and compose file to run both projects.
 - Embedding queries and documents with the same input type.
 - Duplicated documents after re-indexing (always upsert by id).
 - A floor chosen by guessing instead of measured scores.
+- Letting a digit-bearing token count as an "identifier" that skips the relevance floor (`hybrid.py` exact match) in a corpus where digits are years, dates and fund numbers (7.7).
 - Reading a passed citation check as proof the answer is grounded (it only proves the ids were supplied, section 7.6).
 - Computing a grounding result and never acting on it (a failed check must retry, refuse or flag).
 - Tests that call real services.
 - Streaming endpoints that can only report errors as 200 responses (validate before streaming).
+- Installing a package without activating its venv. The UI's `streamlit` went into the global Python and pulled in Starlette 1.9.0, which broke the global FastAPI 0.115.6 (needs Starlette below 0.42) and made `pytest` fail at collection. Install UI packages only inside the UI venv; check `python -c "import sys; print(sys.executable)"` before any `pip install`. Repair: `pip install starlette==0.41.3` and `pip uninstall streamlit` in the global Python. Setting the environment variable `PIP_REQUIRE_VIRTUALENV=true` makes pip refuse global installs.
+- Reading `response.content[0].text`: a model that thinks (Sonnet 5.5) puts a `thinking` block first. Select the block by type (`llm.text_of`, 6.6), and leave `max_tokens` room for thinking.
+- Grading a paraphrasing model with exact-phrase keywords, or with keywords that are not in the evidence; a lower score from a stronger model is a cue to read the answers before trusting the number (7.7).

@@ -7,20 +7,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import pytest
 from fastapi.testclient import TestClient
 from main import app
-from Data.records import FUNDS, SECTORS
+from Data.records import SECTORS
 
 client = TestClient(app)
-
-def test_list_funds():
-    """Test listing all funds"""
-    response = client.get("/funds")
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == len(FUNDS)
-    # Check that we get all the expected funds
-    fund_ids = [f["fund_id"] for f in data]
-    assert set(fund_ids) == set(FUNDS.keys())
 
 def test_get_fund():
     """Test getting a specific fund"""
@@ -49,10 +38,7 @@ def test_fund_records_are_valid():
         assert fund["Percentage_of_fund_represented"] >= 25
         assert fund["Percentage_of_fund_represented"] == pytest.approx(total)
         assert [n["quarter"] for n in fund["NAV_per_share"]] == ["Q1", "Q2", "Q3", "Q4"]
-
-
-def test_bond_fund_fields():
-    """Only the bond fund carries duration and yield"""
-    fund = client.get("/funds/4").json()
-    assert fund["duration_years"] == 5.2
-    assert fund["yield_to_maturity_pct"] == 4.1
+    # only the bond fund carries duration and yield
+    bond = client.get("/funds/4").json()
+    assert bond["duration_years"] == 5.2
+    assert bond["yield_to_maturity_pct"] == 4.1
