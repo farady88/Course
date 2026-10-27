@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from AI_Layer import llm
 from Data.records import PORTFOLIOS, FUNDS
 from routers.errors import provider_errors
+from routers.funds import with_marker
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
 
@@ -76,6 +78,16 @@ def summarise(portfolio: dict = Depends(get_portfolio_or_404)):
     funds = [FUNDS[p["fund_id"]] for p in portfolio["positions"]]
     with provider_errors():
         return llm.summarise_portfolio(portfolio, funds)
+
+
+@router.get("/{portfolio_id}/summary/stream")
+def summarise_stream(portfolio: dict = Depends(get_portfolio_or_404)):
+    #Client-friendly update streamed as text. The first chunk is read before responding so early failures get a real status.
+    funds = [FUNDS[p["fund_id"]] for p in portfolio["positions"]]
+    chunks = llm.stream_portfolio_update(portfolio, funds)
+    with provider_errors():
+        first = next(chunks, "")
+    return StreamingResponse(with_marker(first, chunks), media_type="text/plain")
 
 
 @router.post("")

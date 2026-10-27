@@ -1,6 +1,5 @@
 import httpx
-import pytest
-from anthropic import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
+from anthropic import APITimeoutError
 from fastapi.testclient import TestClient
 from types import SimpleNamespace as NS
 from AI_Layer import llm
@@ -22,16 +21,11 @@ def fake_model(monkeypatch, text="A plain summary."):
     return calls
 
 
-def test_summary_passes_text_and_tokens_through(monkeypatch):
-    fake_model(monkeypatch)
+def test_summary_passes_text_tokens_and_prompt(monkeypatch):
+    calls = fake_model(monkeypatch)
     r = http.get("/funds/4/summary")
     assert r.status_code == 200
     assert r.json() == {"summary": "A plain summary.", "input_tokens": 412, "output_tokens": 158}
-
-
-def test_prompt_has_fund_data_and_caveats(monkeypatch):
-    calls = fake_model(monkeypatch)
-    http.get("/funds/4/summary")
     prompt, system = calls[0]["messages"][0]["content"], calls[0]["system"]
     assert "Meridian Global Government and Corporate Bond" in prompt
     assert "duration_years" in prompt and "NAV_per_share" in prompt and "2024-12-31" in prompt
@@ -44,13 +38,8 @@ def test_unknown_fund_is_404_without_model_call(monkeypatch):
     assert calls == []
 
 
-@pytest.mark.parametrize("error,status", [
-    (RateLimitError("x", response=httpx.Response(429, request=REQ), body=None), 429),
-    (APITimeoutError(request=REQ), 504),
-    (APIStatusError("x", response=httpx.Response(500, request=REQ), body=None), 502),
-    (APIConnectionError(request=REQ), 502),
-])
-def test_summary_maps_provider_errors(monkeypatch, error, status):
+def test_summary_maps_provider_errors(monkeypatch):  # one case: every route shares routers/errors.provider_errors (full matrix in test_agent.py)
+    error, status = APITimeoutError(request=REQ), 504
     def boom(**kw):
         raise error
     monkeypatch.setattr(llm.client.messages, "create", boom)
