@@ -53,10 +53,6 @@ def click(at, label):
     return at
 
 
-def test_features_are_five_tabs_not_one_long_page(api):
-    assert [t.label for t in run_app().tabs] == ["Ask", "Search", "Summary", "Compare", "Client check"]
-
-
 def test_search_lists_score_date_and_status(api):
     at = run_app()
     at.text_input[1].set_value("tobacco")

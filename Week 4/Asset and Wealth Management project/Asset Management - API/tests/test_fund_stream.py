@@ -1,6 +1,5 @@
 import httpx
-import pytest
-from anthropic import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
+from anthropic import APITimeoutError
 from fastapi.testclient import TestClient
 from AI_Layer import llm
 from main import app
@@ -43,16 +42,11 @@ def fake_stream(monkeypatch, **kw):
     return calls
 
 
-def test_chunks_are_joined_into_the_response(monkeypatch):
-    fake_stream(monkeypatch, chunks=["Hello ", "there. ", llm.RISK_WARNING])
+def test_chunks_are_joined_and_prompt_has_fund_data_and_risk_warning(monkeypatch):
+    calls = fake_stream(monkeypatch, chunks=["Hello ", "there. ", llm.RISK_WARNING])
     r = http.get("/funds/4/summary/stream")
     assert r.status_code == 200
     assert r.text == "Hello there. " + llm.RISK_WARNING
-
-
-def test_prompt_has_fund_data_and_risk_warning(monkeypatch):
-    calls = fake_stream(monkeypatch, chunks=["x"])
-    http.get("/funds/4/summary/stream")
     assert "Meridian Global Government and Corporate Bond" in calls[0]["messages"][0]["content"]
     assert llm.RISK_WARNING in calls[0]["system"]
 
@@ -63,13 +57,8 @@ def test_unknown_fund_is_404_without_model_call(monkeypatch):
     assert calls == []
 
 
-@pytest.mark.parametrize("error,status", [
-    (RateLimitError("x", response=httpx.Response(429, request=REQ), body=None), 429),
-    (APITimeoutError(request=REQ), 504),
-    (APIStatusError("x", response=httpx.Response(500, request=REQ), body=None), 502),
-    (APIConnectionError(request=REQ), 502),
-])
-def test_error_before_first_chunk_gets_a_real_status(monkeypatch, error, status):
+def test_error_before_first_chunk_gets_a_real_status(monkeypatch):  # one case: both stream routes share with_marker (full matrix in test_agent.py)
+    error, status = APITimeoutError(request=REQ), 504
     fake_stream(monkeypatch, chunks=["x"], fail_on_open=error)
     assert http.get("/funds/1/summary/stream").status_code == status
 

@@ -51,17 +51,11 @@ def test_model_that_never_stops_hits_limit(monkeypatch):
     assert out["tool_calls_made"] == config.AGENT_MAX_ITERATIONS
 
 
-def test_unknown_tool_is_error_not_raised():
+def test_bad_tool_calls_are_errors():
     assert agent.execute_tool("nope", {}) == ("Unknown tool: nope", True)
-
-
-def test_missing_arguments_are_errors():
     assert agent.execute_tool("search_knowledge_base", {})[1] is True
     assert agent.execute_tool("check_mandate", {"client_id": 1})[1] is True  # neither fund nor portfolio
     assert agent.execute_tool("check_mandate", {"client_id": 1, "fund_id": 1, "portfolio_id": 1})[1] is True
-
-
-def test_unknown_records_are_errors():
     assert agent.execute_tool("check_mandate", {"client_id": 999, "fund_id": 1})[1] is True
     assert agent.execute_tool("check_mandate", {"client_id": 1, "fund_id": 999})[1] is True
     assert agent.execute_tool("check_mandate", {"client_id": 1, "portfolio_id": 999})[1] is True
@@ -94,10 +88,6 @@ def test_search_drops_below_floor_and_formats(monkeypatch):
 def test_route_returns_agent_result(monkeypatch):
     monkeypatch.setattr(agent, "ask_with_tools", lambda q: {"answer": q, "completed": True})
     assert http.post("/agent/ask", json={"question": "hello"}).json() == {"answer": "hello", "completed": True}
-
-
-def test_route_rejects_short_question():
-    assert http.post("/agent/ask", json={"question": "hi"}).status_code == 422
 
 
 @pytest.mark.parametrize("error,status", [

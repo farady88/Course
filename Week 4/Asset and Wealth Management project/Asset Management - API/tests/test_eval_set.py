@@ -15,15 +15,11 @@ def section_containing(body:str, evidence: str) -> tuple[str, str]:
     raise AssertionError(f"evidence not found in any section: {evidence}")
 
 
-# test ids are unique
-def test_ids_are_unique():
+# test every evidence span is in its documents
+def test_every_evidence_span_is_in_its_document():
     ids = [q["id"] for q in EVAL_SET]
     duplicates = {i for i in ids if ids.count(i) > 1}
     assert not duplicates, f"duplicate question ids: {sorted(duplicates)}"
-
-
-# test every evidence span is in its documents
-def test_every_evidence_span_is_in_its_document():
     for q in answerable():
         assert q["doc_id"] in ALL_DOCS, f"{q['id']}: unknown doc {q['doc_id']}"
         body = ALL_DOCS[q["doc_id"]]["body"]

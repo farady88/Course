@@ -1,6 +1,7 @@
 """Knowledge endpoint tests. No Voyage calls, no Anthropic calls, no network.
 The grounded-answer endpoint (/insights/ask) is covered in test_llm.py."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 import Data.knowledge_store as knowledge   # the SAME module the router uses
@@ -39,10 +40,10 @@ def test_index_returns_count_and_tokens(monkeypatch):
     assert response.json() == {"indexed": 25, "embedding_tokens": 1234}
 
 
-def test_short_question_is_rejected_before_any_work():
-    assert client.post("/insights/ask", json={"question": "hi"}).status_code == 422
-
-
-def test_top_k_is_bounded():
-    response = client.post("/knowledge/search", json={"question": "valid question", "top_k": 99})
-    assert response.status_code == 422
+@pytest.mark.parametrize("path,body", [
+    ("/insights/ask", {"question": "hi"}),
+    ("/agent/ask", {"question": "hi"}),
+    ("/knowledge/search", {"question": "valid question", "top_k": 99}),
+])
+def test_bad_request_is_422(path, body):
+    assert client.post(path, json=body).status_code == 422

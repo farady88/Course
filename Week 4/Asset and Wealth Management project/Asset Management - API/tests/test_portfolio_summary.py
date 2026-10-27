@@ -1,6 +1,5 @@
 import httpx
-import pytest
-from anthropic import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
+from anthropic import APITimeoutError
 from fastapi.testclient import TestClient
 from types import SimpleNamespace as NS
 from AI_Layer import llm
@@ -22,26 +21,17 @@ def fake_model(monkeypatch, text="A plain summary."):
     return calls
 
 
-def test_summary_passes_text_and_tokens_through(monkeypatch):
-    fake_model(monkeypatch)
-    r = http.get("/portfolios/1/summary")
+def test_summary_passes_text_tokens_and_prompt(monkeypatch):
+    calls = fake_model(monkeypatch)
+    r = http.get("/portfolios/1/summary")  # holds funds 1, 3 and 4
     assert r.status_code == 200
     assert r.json() == {"summary": "A plain summary.", "input_tokens": 412, "output_tokens": 158}
-
-
-def test_prompt_has_portfolio_and_held_funds_only(monkeypatch):
-    calls = fake_model(monkeypatch)
-    http.get("/portfolios/1/summary")  # holds funds 1, 3 and 4
     prompt, system = calls[0]["messages"][0]["content"], calls[0]["system"]
     assert "Meridian Global Equity Growth" in prompt and "Meridian Global Government and Corporate Bond" in prompt
     assert '"weight_pct": 50.0' in prompt and '"fund_id": 5' not in prompt
     assert "top positions only" in system and "No benchmark returns" in system and "Do not calculate" in system
-
-
-def test_prompt_has_cash_weight(monkeypatch):
-    calls = fake_model(monkeypatch)
     http.get("/portfolios/4/summary")
-    assert '"cash_weight_pct": 10.0' in calls[0]["messages"][0]["content"]
+    assert '"cash_weight_pct": 10.0' in calls[1]["messages"][0]["content"]
 
 
 def test_unknown_portfolio_is_404_without_model_call(monkeypatch):
@@ -50,13 +40,8 @@ def test_unknown_portfolio_is_404_without_model_call(monkeypatch):
     assert calls == []
 
 
-@pytest.mark.parametrize("error,status", [
-    (RateLimitError("x", response=httpx.Response(429, request=REQ), body=None), 429),
-    (APITimeoutError(request=REQ), 504),
-    (APIStatusError("x", response=httpx.Response(500, request=REQ), body=None), 502),
-    (APIConnectionError(request=REQ), 502),
-])
-def test_summary_maps_provider_errors(monkeypatch, error, status):
+def test_summary_maps_provider_errors(monkeypatch):  # one case: every route shares routers/errors.provider_errors (full matrix in test_agent.py)
+    error, status = APITimeoutError(request=REQ), 504
     def boom(**kw):
         raise error
     monkeypatch.setattr(llm.client.messages, "create", boom)

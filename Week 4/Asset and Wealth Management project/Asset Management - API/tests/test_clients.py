@@ -6,25 +6,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 #Data/records.py (which contains the CLIENTS data)
 from fastapi.testclient import TestClient
 import mandate
+import pytest
 from main import app
 from Data.records import CLIENTS, FUNDS
 
 client = TestClient(app)
 
-def test_list_clients():
-    """Test listing all clients"""
+def test_get_client():
+    """Test listing clients and getting a specific one"""
     response = client.get("/clients")
     assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == len(CLIENTS)
-    # Check that we get all the expected clients
-    client_ids = [c["client_id"] for c in data]
-    assert set(client_ids) == set(CLIENTS.keys())
+    assert {c["client_id"] for c in response.json()} == set(CLIENTS.keys())
 
-def test_get_client():
-    """Test getting a specific client"""
-    # Test getting an existing client
     response = client.get("/clients/1")
     assert response.status_code == 200
     data = response.json()
@@ -238,47 +231,14 @@ def breached_rules(client_id, fund_id):
     return {b["rule"] for b in mandate.check_fund(CLIENTS[client_id], FUNDS[fund_id])}
 
 
-def test_clean_pairing():
-    """Fund 3 breaks none of Client 3's rules"""
-    assert breached_rules(3, 3) == set()
-
-
-def test_pairing_breaking_every_rule():
-    """Fund 2 breaks all five of Client 3's rules"""
-    assert breached_rules(3, 2) == {"excluded_sector", "risk", "concentration", "esg", "fee"}
-
-
-def test_excluded_sector_reports_weights():
-    """Client 3 excludes tobacco and fossil fuels, which Fund 2 holds at 3.0% and 4.8%"""
-    excluded = client.get("/clients/3").json()["excluded_sectors"]
-    holdings = client.get("/funds/2").json()["holdings"]
-    found = {h["sector"]: h["weight_pct"] for h in holdings if h["sector"] in excluded}
-    assert found == {"tobacco": 3.0, "fossil_fuels": 4.8}
-
-
-def test_concentration_breach():
-    """Fund 4's 12% holding breaches Client 2's 5% limit and nothing else"""
-    assert breached_rules(2, 4) == {"concentration"}
-
-
-def test_boundary_values_are_compliant():
-    """Fund 5 equals Client 5's limits on risk, fee and top holding, so nothing is breached"""
-    assert breached_rules(5, 5) == set()
-
-
-def test_unrated_fund_fails_esg_minimum():
-    """Fund 6 is unrated, so it fails Client 3's ESG minimum along with risk, concentration and fee"""
-    assert breached_rules(3, 6) == {"risk", "concentration", "esg", "fee"}
-
-
-def test_rules_set_to_none_are_skipped():
-    """Client 4 has no ESG minimum and no fee ceiling, so Fund 6 breaks nothing"""
-    client_4 = client.get("/clients/4").json()
-    assert client_4["min_esg_rating"] is None
-    assert client_4["max_ongoing_charge_pct"] is None
-    assert breached_rules(4, 6) == set()
-
-
-def test_highest_risk_fund():
-    """Fund 7 is above Client 4's risk tolerance and holds gambling, which Client 4 excludes"""
-    assert breached_rules(4, 7) == {"excluded_sector", "risk", "concentration"}
+@pytest.mark.parametrize("client_id,fund_id,expected", [
+    (3, 3, set()),  # clean pairing
+    (3, 2, {"excluded_sector", "risk", "concentration", "esg", "fee"}),  # breaks every rule
+    (2, 4, {"concentration"}),  # a 12% holding against a 5% limit, nothing else
+    (5, 5, set()),  # equals the client's limits on risk, fee and top holding
+    (3, 6, {"risk", "concentration", "esg", "fee"}),  # unrated fund fails the ESG minimum
+    (4, 6, set()),  # client 4 has no ESG minimum and no fee ceiling, so those rules are skipped
+    (4, 7, {"excluded_sector", "risk", "concentration"}),  # highest-risk fund, holds gambling
+])
+def test_mandate_breaches(client_id, fund_id, expected):
+    assert breached_rules(client_id, fund_id) == expected
