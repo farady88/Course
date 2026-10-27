@@ -28,6 +28,8 @@ cd "Asset Management - UI" && streamlit run app.py
 cd "Asset Management - API" && pytest
 pytest tests/test_funds.py::test_name        # single test
 
+# Both suites in one go: bash run_tests.sh (from the project root)
+
 # Tests — UI (separate run, Streamlit AppTest)
 cd "Asset Management - UI" && pytest
 
